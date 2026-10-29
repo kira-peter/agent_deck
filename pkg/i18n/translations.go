@@ -84,8 +84,8 @@ var (
 		Zh: "Enter: 查看详情  D: 删除  A: 归档  /: 搜索  F: 过滤  ESC: 返回",
 	}
 	HintProjectActions = Text{
-		En: "↑↓/jk: Navigate  Enter: Open  D: Delete  R: Refresh  ESC: Back  Q: Quit",
-		Zh: "↑↓/jk: 导航  Enter: 打开  D: 删除  R: 刷新  ESC: 返回  Q: 退出",
+		En: "↑↓/jk: Navigate  Enter: Open  d: Delete  D: Delete now  R: Refresh  ESC: Back  Q: Quit",
+		Zh: "↑↓/jk: 导航  Enter: 打开  d: 删除  D: 直接删除  R: 刷新  ESC: 返回  Q: 退出",
 	}
 
 	// Overview labels
@@ -132,6 +132,44 @@ var (
 		Zh: "最后活动",
 	}
 
+	// Project usage panel
+	UsageTitle = Text{
+		En: "Usage",
+		Zh: "用量",
+	}
+	UsageAllProjects = Text{
+		En: "All projects",
+		Zh: "全部项目",
+	}
+	UsageInput = Text{
+		En: "input",
+		Zh: "输入",
+	}
+	UsageOutput = Text{
+		En: "output",
+		Zh: "输出",
+	}
+	UsageCacheRead = Text{
+		En: "cache read",
+		Zh: "缓存读",
+	}
+	UsageCacheWrite = Text{
+		En: "cache write",
+		Zh: "缓存写",
+	}
+	UsageLinesAdded = Text{
+		En: "added",
+		Zh: "新增行",
+	}
+	UsageLinesRemoved = Text{
+		En: "removed",
+		Zh: "删除行",
+	}
+	UsageWorkTime = Text{
+		En: "work time",
+		Zh: "工作耗时",
+	}
+
 	// Session list headers
 	HeaderID = Text{
 		En: "ID",
@@ -174,6 +212,44 @@ var (
 	ConfirmNo = Text{
 		En: "N: No",
 		Zh: "N: 取消",
+	}
+
+	// Delete project dialog
+	DeleteDlgTitle = Text{
+		En: "Delete Project",
+		Zh: "删除项目",
+	}
+	DeleteDlgWarning = Text{
+		En: "All sessions and memory will be permanently deleted.",
+		Zh: "将永久删除该项目的全部会话与记忆，无法恢复",
+	}
+	DeleteDlgCancel = Text{
+		En: "Cancel",
+		Zh: "取消",
+	}
+	DeleteDlgConfirm = Text{
+		En: "Delete permanently",
+		Zh: "永久删除",
+	}
+	DeleteDlgHint = Text{
+		En: "↑↓/jk: Select   Enter: Confirm   ESC: Cancel",
+		Zh: "↑↓/jk: 选择   Enter: 确认   ESC: 取消",
+	}
+	DeleteDlgDone = Text{
+		En: "Project deleted",
+		Zh: "项目已删除",
+	}
+	DeleteDlgFailed = Text{
+		En: "Delete failed",
+		Zh: "删除失败",
+	}
+	DeleteDlgAnyKey = Text{
+		En: "Press any key to continue",
+		Zh: "按任意键继续",
+	}
+	DeleteDlgAutoClose = Text{
+		En: "Closing in %ds · press any key to close now",
+		Zh: "%d 秒后自动关闭 · 按任意键立即关闭",
 	}
 
 	// Status messages

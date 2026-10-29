@@ -5,13 +5,23 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/mattn/go-runewidth"
 	"github.com/yourusername/claude-manager/pkg/core"
 	"github.com/yourusername/claude-manager/pkg/i18n"
 	"github.com/yourusername/claude-manager/pkg/views"
 	"github.com/yourusername/claude-manager/pkg/views/dirpicker"
 )
+
+// cw measures display width the way terminals draw it: CJK is two cells, but
+// "ambiguous" glyphs such as ─ and ↑ stay one cell even on a Chinese locale.
+var cw = func() *runewidth.Condition {
+	c := runewidth.NewCondition()
+	c.EastAsianWidth = false
+	return c
+}()
 
 // ProjectsView displays all projects
 type ProjectsView struct {
@@ -22,6 +32,7 @@ type ProjectsView struct {
 	height    int
 	selectedIdx int
 	scrollOffset int
+	totalUsage   core.Usage
 }
 
 // NewProjectsView creates a new projects view
@@ -74,8 +85,18 @@ func (v *ProjectsView) Init(screen tcell.Screen) error {
 	})
 
 	v.projects = projects
+	v.refreshUsage()
 
 	return nil
+}
+
+// refreshUsage recomputes per-project usage and the all-projects total.
+func (v *ProjectsView) refreshUsage() {
+	v.claudeDir.FillUsage(v.projects)
+	v.totalUsage = core.Usage{}
+	for _, p := range v.projects {
+		v.totalUsage.Add(p.Usage)
+	}
 }
 
 func (v *ProjectsView) Render() error {
@@ -89,6 +110,9 @@ func (v *ProjectsView) Render() error {
 
 	// Project list
 	v.renderProjectList()
+
+	// Usage of the selected project (or all projects)
+	v.renderUsagePanel()
 
 	// Hints
 	v.renderHints()
@@ -133,6 +157,9 @@ func (v *ProjectsView) renderProjectList() {
 	startY := 7
 	startX := 4
 	maxVisible := v.height - 12 // Leave space for title and hints
+	if v.usagePanelVisible() {
+		maxVisible = v.height - 19 // ...and for the usage panel
+	}
 
 	// 渲染 "新项目" 选项
 	newProjectStyle := tcell.StyleDefault.Foreground(tcell.ColorLightGreen).Bold(true)
@@ -199,6 +226,67 @@ func (v *ProjectsView) renderProjectList() {
 	}
 }
 
+const usagePanelMinHeight = 28
+
+func (v *ProjectsView) usagePanelVisible() bool {
+	return v.height >= usagePanelMinHeight
+}
+
+func (v *ProjectsView) renderUsagePanel() {
+	if !v.usagePanelVisible() {
+		return
+	}
+
+	scope := i18n.UsageAllProjects.Get()
+	usage := v.totalUsage
+	if v.selectedIdx >= 0 && v.selectedIdx < len(v.projects) {
+		scope = v.projects[v.selectedIdx].Path
+		usage = v.projects[v.selectedIdx].Usage
+	}
+	if r := []rune(scope); len(r) > v.width-20 && v.width > 24 {
+		scope = "..." + string(r[len(r)-(v.width-23):])
+	}
+
+	y := v.height - 10
+	v.drawHorizontalLine(y)
+
+	headerStyle := tcell.StyleDefault.Foreground(tcell.ColorLightCyan)
+	valueStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite)
+	x := 4
+
+	titleStyle := tcell.StyleDefault.Foreground(tcell.ColorLightGreen).Bold(true)
+	v.drawText(x, y+1, i18n.UsageTitle.Get()+": ", titleStyle)
+	v.drawText(x+cw.StringWidth(i18n.UsageTitle.Get())+2, y+1, scope, valueStyle)
+
+	columns := []struct {
+		header string
+		value  string
+	}{
+		{i18n.UsageInput.Get(), core.FormatTokens(usage.InputTokens)},
+		{i18n.UsageOutput.Get(), core.FormatTokens(usage.OutputTokens)},
+		{i18n.UsageCacheRead.Get(), core.FormatTokens(usage.CacheReadTokens)},
+		{i18n.UsageCacheWrite.Get(), core.FormatTokens(usage.CacheWriteTokens)},
+		{i18n.UsageLinesAdded.Get(), fmt.Sprintf("%d", usage.LinesAdded)},
+		{i18n.UsageLinesRemoved.Get(), fmt.Sprintf("%d", usage.LinesRemoved)},
+		{i18n.UsageWorkTime.Get(), core.FormatHours(usage.Duration)},
+	}
+	for i, c := range columns {
+		cx := x + i*usageColWidth
+		v.drawText(cx, y+2, padLeft(c.header, usageColWidth-1), headerStyle)
+		v.drawText(cx, y+3, padLeft(c.value, usageColWidth-1), valueStyle)
+	}
+}
+
+const usageColWidth = 12
+
+// padLeft right-aligns s within width display cells (CJK-aware).
+func padLeft(s string, width int) string {
+	if gap := width - cw.StringWidth(s); gap > 0 {
+		return strings.Repeat(" ", gap) + s
+	}
+	return s
+}
+
 func (v *ProjectsView) renderHints() {
 	y := v.height - 2
 	v.drawHorizontalLine(y - 1)
@@ -234,10 +322,13 @@ func (v *ProjectsView) HandleEvent(event tcell.Event) error {
 				v.movePrev()
 			case 'j': // Vim-style down
 				v.moveNext()
-			case 'd', 'D': // Delete project
+			case 'd': // Delete project (with confirmation)
 				if v.selectedIdx >= 0 && v.selectedIdx < len(v.projects) {
-					project := v.projects[v.selectedIdx]
-					v.deleteProject(project)
+					v.deleteProject(v.projects[v.selectedIdx])
+				}
+			case 'D': // Shift+D: delete immediately, no confirmation
+				if v.selectedIdx >= 0 && v.selectedIdx < len(v.projects) {
+					v.quickDeleteProject(v.projects[v.selectedIdx])
 				}
 			case 'r', 'R': // Refresh
 				projects, err := v.claudeDir.GetProjects()
@@ -246,6 +337,7 @@ func (v *ProjectsView) HandleEvent(event tcell.Event) error {
 						return projects[i].LastActivity.After(projects[j].LastActivity)
 					})
 					v.projects = projects
+					v.refreshUsage()
 				}
 			}
 		}
@@ -311,85 +403,53 @@ func (v *ProjectsView) openProjectInClaude(projectPath string) error {
 	return fmt.Errorf("quit")
 }
 
-// deleteProject deletes a project from .claude/projects/
+// deleteProject deletes a project after the user confirms in a dialog.
 func (v *ProjectsView) deleteProject(project core.Project) {
-	// Show confirmation dialog
-	v.screen.Clear()
-
-	y := v.height/2 - 3
-	v.drawCenteredText(y, "确认删除项目",
-		tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true))
-
-	y += 2
-	v.drawCenteredText(y, fmt.Sprintf("项目: %s", project.Path),
-		tcell.StyleDefault.Foreground(tcell.ColorWhite))
-
-	y += 1
-	v.drawCenteredText(y, fmt.Sprintf("会话数: %d  |  大小: %s",
-		project.SessionCount, core.FormatSize(project.TotalSize)),
-		tcell.StyleDefault.Foreground(tcell.ColorGray))
-
-	y += 2
-	v.drawCenteredText(y, "这将删除该项目的所有会话和记忆数据",
-		tcell.StyleDefault.Foreground(tcell.ColorRed))
-
-	y += 2
-	v.drawCenteredText(y, "按 Y 确认删除，按其他键取消",
-		tcell.StyleDefault.Foreground(tcell.ColorLightCyan))
-
-	v.screen.Show()
-
-	// Wait for user input
-	ev := v.screen.PollEvent()
-	if keyEv, ok := ev.(*tcell.EventKey); ok {
-		if keyEv.Rune() == 'y' || keyEv.Rune() == 'Y' {
-			// Perform deletion
-			v.performDelete(project)
-		}
+	if v.confirmDeleteProject(project) {
+		v.performDelete(project)
 	}
+	v.reloadProjects()
+}
 
-	// Refresh the list and re-render
+// quickDeleteProject deletes a project immediately, without any confirmation
+// or success message. Failures are still reported.
+func (v *ProjectsView) quickDeleteProject(project core.Project) {
+	if err := v.removeProjectDir(project); err != nil {
+		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
+	}
+	v.reloadProjects()
+}
+
+// reloadProjects re-reads the project list and keeps the selection in range.
+func (v *ProjectsView) reloadProjects() {
 	projects, err := v.claudeDir.GetProjects()
-	if err == nil {
-		sort.Slice(projects, func(i, j int) bool {
-			return projects[i].LastActivity.After(projects[j].LastActivity)
-		})
-		v.projects = projects
+	if err != nil {
+		return
+	}
+	sort.Slice(projects, func(i, j int) bool {
+		return projects[i].LastActivity.After(projects[j].LastActivity)
+	})
+	v.projects = projects
+	v.refreshUsage()
 
-		// Adjust selectedIdx if needed
-		if v.selectedIdx >= len(v.projects) && len(v.projects) > 0 {
-			v.selectedIdx = len(v.projects) - 1
-		}
+	if v.selectedIdx >= len(v.projects) {
+		v.selectedIdx = len(v.projects) - 1 // -1 selects the "new project" row
 	}
 }
 
-// performDelete actually deletes the project directory from .claude/projects/
+// removeProjectDir deletes the project's directory from .claude/projects/.
+func (v *ProjectsView) removeProjectDir(project core.Project) error {
+	claudeDir := core.GetConfig().GetClaudeDir()
+	return os.RemoveAll(fmt.Sprintf("%s/projects/%s", claudeDir, project.EncodedName))
+}
+
+// performDelete removes the project and reports the outcome in a result box.
 func (v *ProjectsView) performDelete(project core.Project) {
-	config := core.GetConfig()
-	claudeDir := config.GetClaudeDir()
-
-	// The project directory in .claude/projects/ is named using the encoded name
-	projectDir := fmt.Sprintf("%s/projects/%s", claudeDir, project.EncodedName)
-
-	// Delete the directory
-	err := os.RemoveAll(projectDir)
-
-	// Show result
-	v.screen.Clear()
-	y := v.height / 2
-
-	if err != nil {
-		v.drawCenteredText(y, fmt.Sprintf("删除失败: %v", err),
-			tcell.StyleDefault.Foreground(tcell.ColorRed))
+	if err := v.removeProjectDir(project); err != nil {
+		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
 	} else {
-		v.drawCenteredText(y, "项目已成功删除",
-			tcell.StyleDefault.Foreground(tcell.ColorGreen))
+		v.showResultBox(i18n.DeleteDlgDone.Get(), tcell.ColorGreen, resultBoxSeconds)
 	}
-
-	v.drawCenteredText(y+2, "按任意键继续...",
-		tcell.StyleDefault.Foreground(tcell.ColorGray))
-	v.screen.Show()
-	v.screen.PollEvent()
 }
 
 // openNewProject 启动目录选择器以打开新项目
@@ -429,17 +489,18 @@ func (v *ProjectsView) openNewProject() error {
 // Helper drawing functions
 
 func (v *ProjectsView) drawText(x, y int, text string, style tcell.Style) {
-	for i, r := range text {
-		v.screen.SetContent(x+i, y, r, nil, style)
+	for _, r := range text {
+		v.screen.SetContent(x, y, r, nil, style)
+		if w := cw.RuneWidth(r); w > 1 {
+			x += w
+		} else {
+			x++
+		}
 	}
 }
 
 func (v *ProjectsView) drawCenteredText(y int, text string, style tcell.Style) {
-	x := (v.width - len(text)) / 2
-	if x < 0 {
-		x = 0
-	}
-	v.drawText(x, y, text, style)
+	v.drawCenteredTextIn(0, v.width, y, text, style)
 }
 
 func (v *ProjectsView) drawHorizontalLine(y int) {

@@ -255,13 +255,31 @@ func (cd *ClaudeDir) LoadProject(encodedName, projectPath string) (Project, erro
 		return project, err
 	}
 
+	var (
+		jsonlCount int
+		latestMod  time.Time
+	)
+
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") {
 			info, err := entry.Info()
 			if err == nil {
 				project.TotalSize += info.Size()
+				jsonlCount++
+				if info.ModTime().After(latestMod) {
+					latestMod = info.ModTime()
+				}
 			}
 		}
+	}
+
+	// Newer Claude Code versions no longer write sessions-index.json, so fall
+	// back to what the .jsonl files themselves tell us.
+	if project.SessionCount == 0 {
+		project.SessionCount = jsonlCount
+	}
+	if project.LastActivity.IsZero() {
+		project.LastActivity = latestMod
 	}
 
 	return project, nil

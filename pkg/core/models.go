@@ -10,6 +10,7 @@ type Project struct {
 	TotalSize    int64         // Total size in bytes
 	LastActivity time.Time     // Last modification time
 	Sessions     []Session     // List of sessions (loaded on demand)
+	Usage        Usage         // Aggregated usage (filled by FillUsage)
 }
 
 // Session represents a conversation session
