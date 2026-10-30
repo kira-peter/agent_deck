@@ -80,8 +80,8 @@ var (
 		Zh: "↑↓/jk: 导航  Enter: 选择  T: 切换语言  Q: 退出",
 	}
 	HintListActions = Text{
-		En: "Enter: Details  D: Delete  A: Archive  /: Search  F: Filter  ESC: Back",
-		Zh: "Enter: 查看详情  D: 删除  A: 归档  /: 搜索  F: 过滤  ESC: 返回",
+		En: "Enter: Details  d: Delete  D: Delete now  A: Archive  /: Search  F: Filter  ESC: Back",
+		Zh: "Enter: 查看详情  d: 删除  D: 直接删除  A: 归档  /: 搜索  F: 过滤  ESC: 返回",
 	}
 	HintProjectActions = Text{
 		En: "↑↓/jk: Navigate  Enter: Open  d: Delete  D: Delete now  R: Refresh  ESC: Back  Q: Quit",
@@ -222,6 +222,10 @@ var (
 	DeleteDlgWarning = Text{
 		En: "All sessions and memory will be permanently deleted.",
 		Zh: "将永久删除该项目的全部会话与记忆，无法恢复",
+	}
+	DeleteDlgSessionWarning = Text{
+		En: "This session will be permanently deleted.",
+		Zh: "将永久删除该会话，无法恢复",
 	}
 	DeleteDlgCancel = Text{
 		En: "Cancel",

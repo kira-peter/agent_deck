@@ -376,9 +376,13 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 				v.sessions = sessions
 				v.rebuildDisplay()
 			}
-		case 'd', 'D':
+		case 'd': // delete (with confirmation)
 			if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
 				v.deleteSession(v.displayedSessions[v.selectedIdx])
+			}
+		case 'D': // Shift+D: delete immediately, no confirmation
+			if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
+				v.quickDeleteSession(v.displayedSessions[v.selectedIdx])
 			}
 		case 'a', 'A':
 			if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
@@ -508,52 +512,45 @@ func (v *SessionsView) rebuildDisplay() {
 	v.scrollOffset = 0
 }
 
+// deleteSession deletes a session after the user confirms in a dialog.
 func (v *SessionsView) deleteSession(session core.Session) {
-	v.screen.Clear()
-	y := v.height/2 - 3
-	v.drawCenteredText(y, i18n.MsgDeleteConfirm.Get(),
-		tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true))
-	y += 2
-	prompt := session.FirstPrompt
-	if len(prompt) > v.width-10 {
-		prompt = prompt[:v.width-13] + "..."
+	if !v.confirmDeleteSession(session) {
+		return
 	}
-	v.drawCenteredText(y, prompt, tcell.StyleDefault.Foreground(tcell.ColorWhite))
-	y += 2
-	v.drawCenteredText(y, i18n.WarningIrreversible.Get(),
-		tcell.StyleDefault.Foreground(tcell.ColorRed))
-	y += 2
-	v.drawCenteredText(y, fmt.Sprintf("%s  %s", i18n.ConfirmYes.Get(), i18n.ConfirmNo.Get()),
-		tcell.StyleDefault.Foreground(tcell.ColorLightCyan))
-	v.screen.Show()
+	if err := v.removeSession(session); err != nil {
+		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
+		return
+	}
+	v.showResultBox(i18n.MsgDeleteSuccess.Get(), tcell.ColorGreen, resultBoxSeconds)
+}
 
-	ev := v.screen.PollEvent()
-	if keyEv, ok := ev.(*tcell.EventKey); ok {
-		if keyEv.Rune() == 'y' || keyEv.Rune() == 'Y' {
-			err := os.Remove(session.FilePath)
-			v.screen.Clear()
-			mid := v.height / 2
-			if err != nil {
-				v.drawCenteredText(mid, fmt.Sprintf("Error: %v", err),
-					tcell.StyleDefault.Foreground(tcell.ColorRed))
-			} else {
-				v.drawCenteredText(mid, i18n.MsgDeleteSuccess.Get(),
-					tcell.StyleDefault.Foreground(tcell.ColorGreen))
-				// remove from v.sessions
-				for i, s := range v.sessions {
-					if s.ID == session.ID {
-						v.sessions = append(v.sessions[:i], v.sessions[i+1:]...)
-						break
-					}
-				}
-				v.rebuildDisplay()
-			}
-			v.drawCenteredText(mid+2, "按任意键继续...",
-				tcell.StyleDefault.Foreground(tcell.ColorGray))
-			v.screen.Show()
-			v.screen.PollEvent()
+// quickDeleteSession deletes a session immediately, without confirmation or a
+// success message. Failures are still reported.
+func (v *SessionsView) quickDeleteSession(session core.Session) {
+	if err := v.removeSession(session); err != nil {
+		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
+	}
+}
+
+// removeSession deletes the session file, drops it from the list and keeps
+// the selection in range.
+func (v *SessionsView) removeSession(session core.Session) error {
+	if err := os.Remove(session.FilePath); err != nil {
+		return err
+	}
+	for i, s := range v.sessions {
+		if s.ID == session.ID {
+			v.sessions = append(v.sessions[:i], v.sessions[i+1:]...)
+			break
 		}
 	}
+	idx, offset := v.selectedIdx, v.scrollOffset
+	v.rebuildDisplay()
+	if n := len(v.displayedSessions); n > 0 {
+		v.selectedIdx = min(idx, n-1)
+		v.scrollOffset = min(offset, v.selectedIdx)
+	}
+	return nil
 }
 
 func (v *SessionsView) archiveSession(session core.Session) {
