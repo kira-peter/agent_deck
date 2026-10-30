@@ -96,7 +96,7 @@ func (v *OverviewView) renderStatistics() {
 	}
 
 	for i, stat := range stats {
-		y := startY + i*2
+		y := startY + i
 		text := fmt.Sprintf("%-20s: %s", stat.label, stat.value)
 		v.drawText(startX, y, text, tcell.StyleDefault.Foreground(tcell.ColorWhite))
 	}
@@ -107,7 +107,7 @@ func (v *OverviewView) renderActiveSessions() {
 		return
 	}
 
-	startY := 14
+	startY := 9
 	startX := 10
 
 	// Header
@@ -120,7 +120,7 @@ func (v *OverviewView) renderActiveSessions() {
 		if i >= 3 {
 			break // Show max 3
 		}
-		y := startY + 2 + i
+		y := startY + 1 + i
 		text := fmt.Sprintf("  PID %d - %s (%s)",
 			session.PID,
 			session.CWD,
@@ -134,7 +134,7 @@ func (v *OverviewView) renderRecentSessions() {
 		return
 	}
 
-	startY := 20
+	startY := 14
 	startX := 10
 
 	// Header
@@ -147,7 +147,7 @@ func (v *OverviewView) renderRecentSessions() {
 		if i >= 5 {
 			break // Show max 5
 		}
-		y := startY + 2 + i
+		y := startY + 1 + i
 
 		// Truncate first prompt if too long
 		prompt := session.FirstPrompt

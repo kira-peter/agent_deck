@@ -64,14 +64,14 @@ func (v *SettingsView) Render() error {
 	}
 
 	for i, setting := range settings {
-		y := startY + i*2
+		y := startY + i
 		text := fmt.Sprintf("%-25s: %s", setting.label, setting.value)
 		v.drawText(startX, y, text, tcell.StyleDefault.Foreground(tcell.ColorWhite))
 	}
 
 	// Configuration file location
 	configPath := core.GetConfigPath()
-	y := startY + len(settings)*2 + 2
+	y := startY + len(settings) + 1
 	v.drawText(startX, y, fmt.Sprintf("Config file: %s", configPath),
 		tcell.StyleDefault.Foreground(tcell.ColorGray))
 
