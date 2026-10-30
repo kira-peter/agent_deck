@@ -7,6 +7,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/yourusername/claude-manager/pkg/i18n"
 	"github.com/yourusername/claude-manager/pkg/views"
+	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
 )
 
 // GuideView displays documentation about Claude's memory system
@@ -244,17 +245,11 @@ func (v *GuideView) Cleanup() error {
 }
 
 func (v *GuideView) drawText(x, y int, text string, style tcell.Style) {
-	for i, r := range text {
-		v.screen.SetContent(x+i, y, r, nil, style)
-	}
+	textwidth.Draw(v.screen, x, y, text, style)
 }
 
 func (v *GuideView) drawCenteredText(y int, text string, style tcell.Style) {
-	x := (v.width - len(text)) / 2
-	if x < 0 {
-		x = 0
-	}
-	v.drawText(x, y, text, style)
+	textwidth.DrawCentered(v.screen, v.width, y, text, style)
 }
 
 func (v *GuideView) drawHorizontalLine(y int) {

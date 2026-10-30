@@ -7,6 +7,7 @@ import (
 	"github.com/yourusername/claude-manager/pkg/core"
 	"github.com/yourusername/claude-manager/pkg/i18n"
 	"github.com/yourusername/claude-manager/pkg/views"
+	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
 )
 
 // SettingsView displays and allows editing of settings
@@ -65,7 +66,7 @@ func (v *SettingsView) Render() error {
 
 	for i, setting := range settings {
 		y := startY + i
-		text := fmt.Sprintf("%-25s: %s", setting.label, setting.value)
+		text := fmt.Sprintf("%s: %s", textwidth.PadRight(setting.label, 25), setting.value)
 		v.drawText(startX, y, text, tcell.StyleDefault.Foreground(tcell.ColorWhite))
 	}
 
@@ -117,17 +118,11 @@ func (v *SettingsView) Cleanup() error {
 }
 
 func (v *SettingsView) drawText(x, y int, text string, style tcell.Style) {
-	for i, r := range text {
-		v.screen.SetContent(x+i, y, r, nil, style)
-	}
+	textwidth.Draw(v.screen, x, y, text, style)
 }
 
 func (v *SettingsView) drawCenteredText(y int, text string, style tcell.Style) {
-	x := (v.width - len(text)) / 2
-	if x < 0 {
-		x = 0
-	}
-	v.drawText(x, y, text, style)
+	textwidth.DrawCentered(v.screen, v.width, y, text, style)
 }
 
 func (v *SettingsView) drawHorizontalLine(y int) {

@@ -7,6 +7,7 @@ import (
 	"github.com/yourusername/claude-manager/pkg/core"
 	"github.com/yourusername/claude-manager/pkg/i18n"
 	"github.com/yourusername/claude-manager/pkg/views"
+	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
 )
 
 // OverviewView displays summary statistics
@@ -97,7 +98,7 @@ func (v *OverviewView) renderStatistics() {
 
 	for i, stat := range stats {
 		y := startY + i
-		text := fmt.Sprintf("%-20s: %s", stat.label, stat.value)
+		text := fmt.Sprintf("%s: %s", textwidth.PadRight(stat.label, 20), stat.value)
 		v.drawText(startX, y, text, tcell.StyleDefault.Foreground(tcell.ColorWhite))
 	}
 }
@@ -203,17 +204,11 @@ func (v *OverviewView) Cleanup() error {
 // Helper drawing functions
 
 func (v *OverviewView) drawText(x, y int, text string, style tcell.Style) {
-	for i, r := range text {
-		v.screen.SetContent(x+i, y, r, nil, style)
-	}
+	textwidth.Draw(v.screen, x, y, text, style)
 }
 
 func (v *OverviewView) drawCenteredText(y int, text string, style tcell.Style) {
-	x := (v.width - len(text)) / 2
-	if x < 0 {
-		x = 0
-	}
-	v.drawText(x, y, text, style)
+	textwidth.DrawCentered(v.screen, v.width, y, text, style)
 }
 
 func (v *OverviewView) drawHorizontalLine(y int) {

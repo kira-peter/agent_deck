@@ -7,6 +7,7 @@ import (
 	"github.com/yourusername/claude-manager/pkg/core"
 	"github.com/yourusername/claude-manager/pkg/i18n"
 	"github.com/yourusername/claude-manager/pkg/views"
+	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
 )
 
 // MemoryView displays memory files
@@ -144,17 +145,11 @@ func (v *MemoryView) Cleanup() error {
 }
 
 func (v *MemoryView) drawText(x, y int, text string, style tcell.Style) {
-	for i, r := range text {
-		v.screen.SetContent(x+i, y, r, nil, style)
-	}
+	textwidth.Draw(v.screen, x, y, text, style)
 }
 
 func (v *MemoryView) drawCenteredText(y int, text string, style tcell.Style) {
-	x := (v.width - len(text)) / 2
-	if x < 0 {
-		x = 0
-	}
-	v.drawText(x, y, text, style)
+	textwidth.DrawCentered(v.screen, v.width, y, text, style)
 }
 
 func (v *MemoryView) drawHorizontalLine(y int) {

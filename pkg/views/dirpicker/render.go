@@ -6,6 +6,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/yourusername/claude-manager/pkg/i18n"
+	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
 )
 
 // renderTitle 渲染标题栏
@@ -184,17 +185,11 @@ func (v *DirPickerView) renderHints() {
 // 辅助绘图函数
 
 func (v *DirPickerView) drawText(x, y int, text string, style tcell.Style) {
-	for i, r := range text {
-		v.screen.SetContent(x+i, y, r, nil, style)
-	}
+	textwidth.Draw(v.screen, x, y, text, style)
 }
 
 func (v *DirPickerView) drawCenteredText(y int, text string, style tcell.Style) {
-	x := (v.width - len(text)) / 2
-	if x < 0 {
-		x = 0
-	}
-	v.drawText(x, y, text, style)
+	textwidth.DrawCentered(v.screen, v.width, y, text, style)
 }
 
 func (v *DirPickerView) drawHorizontalLine(y int) {
