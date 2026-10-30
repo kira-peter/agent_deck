@@ -19,6 +19,7 @@ const (
 	kindText                  // free text / number input
 	kindInfo                  // read-only summary (env, rules)
 	kindOpen                  // opens a file or folder
+	kindPick                  // opens the model picker
 )
 
 // row is one line of the settings page.
@@ -132,8 +133,12 @@ func (v *SettingsView) buildRows() []row {
 		}
 		for _, e := range envs {
 			key := e.Key
+			kind := kindText
+			if key == "ANTHROPIC_MODEL" {
+				kind = kindPick
+			}
 			rows = append(rows, row{
-				kind: kindText, label: key,
+				kind: kind, label: key,
 				value: maskSecret(key, rawString(e.Value)),
 				seed:  rawString(e.Value),
 				apply: func(in string) error { return v.saveSetting("env."+key, in) },

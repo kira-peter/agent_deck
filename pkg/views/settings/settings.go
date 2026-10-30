@@ -27,6 +27,7 @@ type SettingsView struct {
 	selected  int // index into rows; always a selectable row
 	scroll    int
 	editing   bool
+	pick      *picker
 	input     []rune
 	inputErr  string
 	statusMsg string
@@ -102,6 +103,12 @@ func (v *SettingsView) setStatus(msg string, isErr bool) {
 
 func (v *SettingsView) Render() error {
 	v.screen.Clear()
+
+	if v.pick != nil {
+		v.renderPicker()
+		v.screen.Show()
+		return nil
+	}
 
 	v.drawCenteredText(1, i18n.ViewSettings.Get(), tcell.StyleDefault.
 		Foreground(tcell.ColorLightGreen).Bold(true))
@@ -199,6 +206,10 @@ func (v *SettingsView) Render() error {
 func (v *SettingsView) HandleEvent(event tcell.Event) error {
 	switch ev := event.(type) {
 	case *tcell.EventKey:
+		if v.pick != nil {
+			v.handlePickKey(ev)
+			return nil
+		}
 		if v.editing {
 			v.handleEditKey(ev)
 			return nil
@@ -257,6 +268,8 @@ func (v *SettingsView) activate() {
 	switch r.kind {
 	case kindCycle:
 		v.finish(r.apply(r.next()))
+	case kindPick:
+		v.openPicker(r.seed, r.apply)
 	case kindText:
 		v.editing = true
 		v.input = []rune(r.seed)
