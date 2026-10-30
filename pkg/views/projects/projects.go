@@ -309,8 +309,7 @@ func (v *ProjectsView) HandleEvent(event tcell.Event) error {
 				// 打开新项目 - 启动目录选择器
 				return v.openNewProject()
 			} else if v.selectedIdx >= 0 && v.selectedIdx < len(v.projects) {
-				project := v.projects[v.selectedIdx]
-				return v.openProjectInClaude(project.Path)
+				return v.openProject(v.projects[v.selectedIdx])
 			}
 		case tcell.KeyUp:
 			v.movePrev()
@@ -367,8 +366,27 @@ func (v *ProjectsView) moveNext() {
 	}
 }
 
-// openProjectInClaude opens Claude Code in the specified project directory
-func (v *ProjectsView) openProjectInClaude(projectPath string) error {
+// openProject opens the project in Claude Code. With existing sessions the
+// user first picks between a new session and resuming one of them.
+func (v *ProjectsView) openProject(project core.Project) error {
+	sessions := v.loadProjectSessions(project)
+	if len(sessions) == 0 {
+		return v.openProjectInClaude(project.Path, "")
+	}
+
+	switch choice := v.chooseSession(project, sessions); choice {
+	case resumeCancel:
+		return nil
+	case resumeNew:
+		return v.openProjectInClaude(project.Path, "")
+	default:
+		return v.openProjectInClaude(project.Path, sessions[choice].ID)
+	}
+}
+
+// openProjectInClaude starts claude in projectPath in a new window. A
+// non-empty sessionID resumes that session instead of starting a new one.
+func (v *ProjectsView) openProjectInClaude(projectPath, sessionID string) error {
 	// Check if the directory exists
 	if _, err := os.Stat(projectPath); os.IsNotExist(err) {
 		// Show error message on screen
@@ -384,9 +402,15 @@ func (v *ProjectsView) openProjectInClaude(projectPath string) error {
 
 	// On Windows, use PowerShell to start a new terminal with Claude
 	// Use 'start' to open a new window
+	// The old call passed the project path as an argument to claude, which is
+	// redundant with -WorkingDirectory; only the resume flag is needed.
+	args := ""
+	if sessionID != "" {
+		args = fmt.Sprintf(" -ArgumentList '--resume','%s'", psQuote(sessionID))
+	}
 	cmd := exec.Command("powershell", "-Command",
-		fmt.Sprintf("Start-Process -FilePath 'claude' -ArgumentList '%s' -WorkingDirectory '%s'",
-			projectPath, projectPath))
+		fmt.Sprintf("Start-Process -FilePath 'claude'%s -WorkingDirectory '%s'",
+			args, psQuote(projectPath)))
 
 	// Try to start the command
 	if err := cmd.Run(); err != nil {
@@ -480,7 +504,7 @@ func (v *ProjectsView) openNewProject() error {
 			if err.Error() == "confirmed" {
 				// 用户确认了选择
 				selectedPath := picker.GetSelectedPath()
-				return v.openProjectInClaude(selectedPath)
+				return v.openProjectInClaude(selectedPath, "")
 			}
 			// 取消或返回 - 返回项目列表
 			return nil
@@ -510,4 +534,9 @@ func (v *ProjectsView) drawHorizontalLine(y int) {
 		v.screen.SetContent(x, y, '─', nil, tcell.StyleDefault.
 			Foreground(tcell.ColorGray))
 	}
+}
+
+// psQuote escapes a value for use inside a single-quoted PowerShell string.
+func psQuote(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }
