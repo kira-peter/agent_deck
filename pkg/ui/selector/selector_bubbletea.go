@@ -32,6 +32,17 @@ func NewBubbleTeaSelector() *BubbleTeaSelector {
 	return s
 }
 
+// SelectByID moves the selection to the view with the given ID. Unknown IDs
+// leave the selection unchanged.
+func (s *BubbleTeaSelector) SelectByID(id string) {
+	for i, v := range s.viewList {
+		if v.ID == id {
+			s.selectedIdx = i
+			return
+		}
+	}
+}
+
 // SetSize updates the dimensions
 func (s *BubbleTeaSelector) SetSize(width, height int) {
 	s.width = width

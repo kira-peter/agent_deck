@@ -35,9 +35,15 @@ type model struct {
 	height         int
 }
 
+// lastViewID remembers the view opened last, so the selector highlights it
+// again when the user comes back from that view.
+var lastViewID string
+
 func initialModel() model {
+	sel := selector.NewBubbleTeaSelector()
+	sel.SelectByID(lastViewID)
 	return model{
-		selector: selector.NewBubbleTeaSelector(),
+		selector: sel,
 		ready:    false,
 	}
 }
@@ -116,6 +122,8 @@ func main() {
 			// User quit without selecting a view
 			return
 		}
+
+		lastViewID = selectedViewID
 
 		// Run the selected view with tcell
 		shouldContinue := runView(selectedViewID)
