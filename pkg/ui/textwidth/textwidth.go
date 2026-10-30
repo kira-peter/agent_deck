@@ -39,6 +39,12 @@ func DrawCentered(screen tcell.Screen, width, y int, text string, style tcell.St
 	Draw(screen, max((width-StringWidth(text))/2, 0), y, text, style)
 }
 
+// Truncate shortens text to at most width display cells, ending in "..." when
+// it had to cut.
+func Truncate(text string, width int) string {
+	return cond.Truncate(text, max(width, 0), "...")
+}
+
 // PadRight pads text with spaces on the right up to width display cells.
 func PadRight(text string, width int) string {
 	if gap := width - StringWidth(text); gap > 0 {

@@ -507,50 +507,79 @@ func (cd *ClaudeDir) GetActiveSessions() ([]ActiveSession, error) {
 	return activeSessions, nil
 }
 
-// GetMemories returns all MEMORY.md files across projects
+// GetMemories returns every memory file Claude Code reads: the user-level
+// CLAUDE.md, each project's CLAUDE.md, and the auto-memory folder
+// (MEMORY.md index plus topic files) under projects/<project>/memory.
 func (cd *ClaudeDir) GetMemories() ([]Memory, error) {
-	projectsDir := filepath.Join(cd.Path, "projects")
+	var memories []Memory
 
+	if m, ok := newMemory(MemoryUser, "", filepath.Join(cd.Path, "CLAUDE.md")); ok {
+		memories = append(memories, m)
+	}
+
+	projectsDir := filepath.Join(cd.Path, "projects")
 	entries, err := os.ReadDir(projectsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []Memory{}, nil
+			return memories, nil
 		}
 		return nil, err
 	}
 
-	var memories []Memory
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 
-		encodedName := entry.Name()
-		memoryPath := filepath.Join(projectsDir, encodedName, "memory", "MEMORY.md")
+		projectPath := DecodePathByExploration(entry.Name())
 
-		if info, err := os.Stat(memoryPath); err == nil && !info.IsDir() {
-			memory := Memory{
-				ProjectPath:  DecodePathByExploration(encodedName),
-				FilePath:     memoryPath,
-				Size:         info.Size(),
-				LastModified: info.ModTime(),
+		if m, ok := newMemory(MemoryProject, projectPath, filepath.Join(projectPath, "CLAUDE.md")); ok {
+			memories = append(memories, m)
+		}
+
+		memDir := filepath.Join(projectsDir, entry.Name(), "memory")
+		files, err := os.ReadDir(memDir)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(strings.ToLower(f.Name()), ".md") {
+				continue
 			}
-
-			// Read preview (first 5 lines)
-			if preview, err := readFirstLines(memoryPath, 5); err == nil {
-				memory.Preview = preview
+			kind := MemoryTopic
+			if f.Name() == "MEMORY.md" {
+				kind = MemoryAuto
 			}
-
-			// Count entries (simple heuristic: count "- " at line start)
-			if count, err := countMemoryEntries(memoryPath); err == nil {
-				memory.EntryCount = count
+			if m, ok := newMemory(kind, projectPath, filepath.Join(memDir, f.Name())); ok {
+				memories = append(memories, m)
 			}
-
-			memories = append(memories, memory)
 		}
 	}
 
 	return memories, nil
+}
+
+// newMemory stats path and fills a Memory; ok is false if it is not a file.
+func newMemory(kind MemoryKind, projectPath, path string) (Memory, bool) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return Memory{}, false
+	}
+	m := Memory{
+		Kind:         kind,
+		Name:         filepath.Base(path),
+		ProjectPath:  projectPath,
+		FilePath:     path,
+		Size:         info.Size(),
+		LastModified: info.ModTime(),
+	}
+	if preview, err := readFirstLines(path, 5); err == nil {
+		m.Preview = preview
+	}
+	if count, err := countMemoryEntries(path); err == nil {
+		m.EntryCount = count
+	}
+	return m, true
 }
 
 // GetOverview returns summary statistics
@@ -764,6 +793,13 @@ func extractTextContent(raw json.RawMessage) string {
 
 // Utility function for formatting sizes
 func FormatSize(bytes int64) string {
+	switch GetConfig().GetDisplay().SizeUnit {
+	case "KB":
+		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	case "MB":
+		return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+	}
+
 	const unit = 1024
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
@@ -781,6 +817,9 @@ func FormatRelativeTime(t time.Time) string {
 	// Check for zero/uninitialized time
 	if t.IsZero() || t.Year() == 1 {
 		return "N/A"
+	}
+	if GetConfig().GetDisplay().DateFormat == "absolute" {
+		return t.Local().Format("2006-01-02 15:04")
 	}
 
 	duration := time.Since(t)

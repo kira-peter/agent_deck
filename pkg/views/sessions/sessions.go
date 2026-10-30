@@ -137,7 +137,7 @@ func (v *SessionsView) renderTableHeader() {
 func (v *SessionsView) renderSessionList() {
 	startY := 7
 	startX := 4
-	maxVisible := v.height - 12
+	maxVisible := core.VisibleRows(v.height - 12)
 
 	if len(v.displayedSessions) == 0 {
 		v.drawCenteredText(startY+2, i18n.StatusNoData.Get(),

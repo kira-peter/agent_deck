@@ -163,6 +163,31 @@ func (c *Config) SetClaudeDir(dir string) error {
 	return c.Save()
 }
 
+// GetDisplay returns a copy of the display options (thread-safe)
+func (c *Config) GetDisplay() DisplayConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Display
+}
+
+// UpdateDisplay applies fn to the display options and saves the configuration
+func (c *Config) UpdateDisplay(fn func(*DisplayConfig)) error {
+	c.mu.Lock()
+	fn(&c.Display)
+	c.mu.Unlock()
+
+	return c.Save()
+}
+
+// VisibleRows caps the number of list rows that fit on screen (avail) by the
+// "items per page" display option.
+func VisibleRows(avail int) int {
+	if n := GetConfig().GetDisplay().ItemsPerPage; n > 0 && n < avail {
+		avail = n
+	}
+	return max(avail, 1)
+}
+
 // GetLanguage returns the current language setting (thread-safe)
 func (c *Config) GetLanguage() string {
 	c.mu.RLock()

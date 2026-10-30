@@ -161,6 +161,8 @@ func (v *ProjectsView) renderProjectList() {
 		maxVisible = v.height - 19 // ...and for the usage panel
 	}
 
+	maxVisible = core.VisibleRows(maxVisible)
+
 	// 渲染 "新项目" 选项
 	newProjectStyle := tcell.StyleDefault.Foreground(tcell.ColorLightGreen).Bold(true)
 	if v.selectedIdx == -1 {
