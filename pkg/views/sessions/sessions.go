@@ -536,7 +536,7 @@ func (v *SessionsView) quickDeleteSession(session core.Session) {
 // removeSession deletes the session file, drops it from the list and keeps
 // the selection in range.
 func (v *SessionsView) removeSession(session core.Session) error {
-	if err := os.Remove(session.FilePath); err != nil {
+	if err := core.DeleteSessionFiles(session); err != nil {
 		return err
 	}
 	for i, s := range v.sessions {
