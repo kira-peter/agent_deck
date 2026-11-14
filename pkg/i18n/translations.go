@@ -41,7 +41,7 @@ var (
 	}
 	ViewGuide = Text{
 		En: "Guide",
-		Zh: "功能说明",
+		Zh: "指南",
 	}
 	ViewSettings = Text{
 		En: "Settings",
@@ -73,6 +73,12 @@ var (
 		En: "Configure application settings",
 		Zh: "配置应用设置",
 	}
+
+	// Shown when the terminal cannot hold the main menu
+	WindowTooSmall     = Text{En: "Window too small", Zh: "窗口太小，放不下菜单"}
+	WindowSizeNow      = Text{En: "Current: %d × %d", Zh: "当前：%d × %d"}
+	WindowSizeNeed     = Text{En: "Needed:  %d × %d", Zh: "至少：%d × %d"}
+	WindowTooSmallHint = Text{En: "Enlarge the terminal or press Q to quit", Zh: "请放大终端窗口，或按 Q 退出"}
 
 	// Navigation hints
 	HintNavigation = Text{

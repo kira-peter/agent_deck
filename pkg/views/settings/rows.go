@@ -29,11 +29,11 @@ type row struct {
 	value string // already formatted for display
 
 	// kindCycle / kindText
-	apply func(input string) error // stores the new value
-	clear func() error             // removes the value; nil = not clearable
-	next  func() string            // kindCycle: the value to store next
-	seed  string                   // kindText: initial content of the input box
-	isInt bool                     // kindText: input must be a whole number
+	apply   func(input string) error // stores the new value
+	clear   func() error             // removes the value; nil = not clearable
+	choices []string                 // kindCycle: the values offered on the wheel
+	seed    string                   // kindText: initial content of the input box
+	isInt   bool                     // kindText: input must be a whole number
 
 	// kindOpen
 	path string
@@ -73,15 +73,14 @@ func rawString(raw json.RawMessage) string {
 	return string(raw)
 }
 
-// choose returns the entry after cur in choices (wrapping), starting from the
-// first one when cur is not in the list.
-func choose(choices []string, cur string) string {
+// indexOf returns the position of cur in choices, or 0 when it is not there.
+func indexOf(choices []string, cur string) int {
 	for i, c := range choices {
 		if c == cur {
-			return choices[(i+1)%len(choices)]
+			return i
 		}
 	}
-	return choices[0]
+	return 0
 }
 
 // buildRows lays out the whole page from the current config and settings.
@@ -97,8 +96,8 @@ func (v *SettingsView) buildRows() []row {
 	cycleDisp := func(label string, cur string, choices []string, set func(*core.DisplayConfig, string)) row {
 		return row{
 			kind: kindCycle, label: label, value: cur,
-			next:  func() string { return choose(choices, cur) },
-			apply: func(in string) error { return saveDisp(func(d *core.DisplayConfig) { set(d, in) }) },
+			choices: choices,
+			apply:   func(in string) error { return saveDisp(func(d *core.DisplayConfig) { set(d, in) }) },
 		}
 	}
 	rows = append(rows,
@@ -189,23 +188,18 @@ func (v *SettingsView) claudeRows() []row {
 		val, _ := show(path)
 		return row{
 			kind: kindCycle, label: label, value: val,
-			next:  func() string { return choose(choices, val) },
-			apply: func(in string) error { return v.saveSetting(path, in) },
-			clear: func() error { return v.clearSetting(path) },
+			choices: choices,
+			apply:   func(in string) error { return v.saveSetting(path, in) },
+			clear:   func() error { return v.clearSetting(path) },
 		}
 	}
 	boolean := func(label, path string) row {
-		val, set := show(path)
+		val, _ := show(path)
 		return row{
 			kind: kindCycle, label: label, value: val,
-			next: func() string {
-				if set && val == "true" {
-					return "false"
-				}
-				return "true"
-			},
-			apply: func(in string) error { return v.saveSetting(path, in == "true") },
-			clear: func() error { return v.clearSetting(path) },
+			choices: []string{"true", "false"},
+			apply:   func(in string) error { return v.saveSetting(path, in == "true") },
+			clear:   func() error { return v.clearSetting(path) },
 		}
 	}
 

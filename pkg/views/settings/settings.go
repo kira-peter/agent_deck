@@ -28,6 +28,7 @@ type SettingsView struct {
 	scroll    int
 	editing   bool
 	pick      *picker
+	wheel     *wheel // open choice wheel on the selected row, nil when closed
 	input     []rune
 	inputErr  string
 	statusMsg string
@@ -117,6 +118,11 @@ func (v *SettingsView) Render() error {
 	const startY, startX = 5, 6
 	listH := max(v.height-startY-5, 1)
 
+	// the wheel may have scrolled past the ends of the list; undo that
+	if v.wheel == nil {
+		v.scroll = min(max(v.scroll, 0), max(len(v.rows)-listH, 0))
+	}
+
 	// keep the cursor visible (the section header above it counts as context)
 	if v.selected < v.scroll {
 		v.scroll = v.selected
@@ -126,6 +132,17 @@ func (v *SettingsView) Render() error {
 	}
 	if v.selected >= v.scroll+listH {
 		v.scroll = v.selected - listH + 1
+	}
+	// an open wheel needs a fixed band of rows above and below its row; the
+	// band may run past the ends of the list, those lines are just blank
+	if v.wheel != nil {
+		top := v.selected - wheelClearance
+		if v.selected+wheelClearance >= v.scroll+listH {
+			v.scroll = v.selected + wheelClearance - listH + 1
+		}
+		if top < v.scroll {
+			v.scroll = top
+		}
 	}
 
 	labelW := 0
@@ -138,18 +155,37 @@ func (v *SettingsView) Render() error {
 	valueX := startX + 2 + labelW + 4
 	valueW := max(v.width-valueX-4, 10)
 
-	for i := v.scroll; i < len(v.rows) && i < v.scroll+listH; i++ {
+	for i := max(v.scroll, 0); i < len(v.rows) && i < v.scroll+listH; i++ {
 		r := v.rows[i]
 		y := startY + (i - v.scroll)
 
+		// while the wheel is open the rows next to it are hidden and the rest
+		// of the page is dimmed
+		open := v.wheel != nil
+		if open && i != v.selected && i >= v.selected-wheelClearance && i <= v.selected+wheelClearance {
+			continue
+		}
+
 		switch r.kind {
 		case kindHeader:
-			v.drawText(startX, y, r.label, tcell.StyleDefault.
-				Foreground(tcell.ColorLightCyan).Bold(true))
+			st := tcell.StyleDefault.Foreground(tcell.ColorLightCyan).Bold(true)
+			if open {
+				st = dimmed
+			}
+			v.drawText(startX, y, r.label, st)
 			continue
 		case kindInfo:
-			v.drawText(startX+2, y, textwidth.Truncate(r.value, v.width-startX-8),
-				tcell.StyleDefault.Foreground(tcell.ColorGray))
+			st := tcell.StyleDefault.Foreground(tcell.ColorGray)
+			if open {
+				st = dimmed
+			}
+			v.drawText(startX+2, y, textwidth.Truncate(r.value, v.width-startX-8), st)
+			continue
+		}
+
+		if open && i != v.selected {
+			v.drawText(startX+2, y, textwidth.Truncate(r.label, labelW), dimmed)
+			v.drawText(valueX, y, textwidth.Truncate(r.value, valueW), dimmed)
 			continue
 		}
 
@@ -157,6 +193,14 @@ func (v *SettingsView) Render() error {
 		if i == v.selected {
 			style = tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorLightGreen)
 			v.fillLine(startX, y, v.width-startX-2, style)
+		}
+
+		if i == v.selected && v.wheel != nil {
+			labelStyle := tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true)
+			v.drawText(startX, y, "▌", labelStyle)
+			v.drawText(startX+2, y, textwidth.Truncate(r.label, labelW), labelStyle)
+			v.drawWheel(valueX-2, y, valueW+2)
+			continue
 		}
 
 		v.drawText(startX+2, y, textwidth.Truncate(r.label, labelW), style)
@@ -194,8 +238,13 @@ func (v *SettingsView) Render() error {
 	// hints
 	v.drawHorizontalLine(v.height - 3)
 	hint := i18n.SetHintBrowse.Get()
-	if v.editing {
+	switch {
+	case v.editing:
 		hint = i18n.SetHintEdit.Get()
+	case v.wheel != nil && v.wheel.numeric:
+		hint = i18n.SetHintWheelNum.Get()
+	case v.wheel != nil:
+		hint = i18n.SetHintWheel.Get()
 	}
 	v.drawCenteredText(v.height-2, hint, tcell.StyleDefault.Foreground(tcell.ColorGray))
 
@@ -212,6 +261,10 @@ func (v *SettingsView) HandleEvent(event tcell.Event) error {
 		}
 		if v.editing {
 			v.handleEditKey(ev)
+			return nil
+		}
+		if v.wheel != nil {
+			v.handleWheelKey(ev)
 			return nil
 		}
 		return v.handleBrowseKey(ev)
@@ -267,10 +320,13 @@ func (v *SettingsView) activate() {
 
 	switch r.kind {
 	case kindCycle:
-		v.finish(r.apply(r.next()))
+		v.openWheel(r)
 	case kindPick:
 		v.openPicker(r.seed, r.apply)
 	case kindText:
+		if v.openWheel(r) {
+			return
+		}
 		v.editing = true
 		v.input = []rune(r.seed)
 		v.inputErr = ""

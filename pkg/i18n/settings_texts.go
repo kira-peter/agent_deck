@@ -42,6 +42,14 @@ var (
 		En: "↑↓/jk: Select  Enter: Change/Open  x: Clear  R: Reload  T: Language  ESC: Back  Q: Quit",
 		Zh: "↑↓/jk: 选择  Enter: 修改/打开  x: 清除  R: 重新加载  T: 切换语言  ESC: 返回  Q: 退出",
 	}
+	SetHintWheel = Text{
+		En: "↑↓/jk: Scroll  Enter: Apply  ESC: Cancel",
+		Zh: "↑↓/jk: 滚动选择  Enter: 确定  ESC: 取消",
+	}
+	SetHintWheelNum = Text{
+		En: "↑↓/jk: Scroll  0-9: Type a number  Enter: Apply  ESC: Cancel",
+		Zh: "↑↓/jk: 滚动选择  0-9: 手动输入  Enter: 确定  ESC: 取消",
+	}
 	SetHintEdit = Text{
 		En: "Type to edit  Enter: Save  ESC: Cancel",
 		Zh: "输入内容  Enter: 保存  ESC: 取消",

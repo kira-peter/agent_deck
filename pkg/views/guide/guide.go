@@ -29,7 +29,7 @@ func (v *GuideView) Metadata() views.Metadata {
 	return views.Metadata{
 		ID:     "guide",
 		NameEn: "Guide",
-		NameZh: "功能说明",
+		NameZh: "指南",
 		DescEn: "Learn about Claude's memory system",
 		DescZh: "了解 Claude 的记忆系统",
 		Icon:   "📖",
