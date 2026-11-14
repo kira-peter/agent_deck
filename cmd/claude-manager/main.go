@@ -12,6 +12,7 @@ import (
 	"github.com/yourusername/claude-manager/pkg/core"
 	"github.com/yourusername/claude-manager/pkg/i18n"
 	"github.com/yourusername/claude-manager/pkg/ui/selector"
+	"github.com/yourusername/claude-manager/pkg/ui/transition"
 	"github.com/yourusername/claude-manager/pkg/views"
 
 	// Import views to trigger their init() registration
@@ -101,10 +102,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selector.SetSize(msg.Width, msg.Height)
 		if !m.ready {
 			m.ready = true
+			// the view already closed the split onto the line; shrink it back
 			if returning && m.selector.StartTransition(true) {
 				returning = false
 				return m, frameCmd()
 			}
+			returning = false
 		}
 		return m, nil
 
@@ -113,7 +116,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, frameCmd()
 		}
 		if m.selectedViewID != "" {
-			return m, tea.Quit // forward transition finished: open the view
+			// stretch finished: hand the line frame to the view, which plays
+			// the split while uncovering itself
+			if lines, row, ok := m.selector.LineFrame(); ok {
+				transition.Hand(&transition.Frame{Rows: transition.FromANSI(lines, m.width), Line: row})
+			}
+			return m, tea.Quit
 		}
 		return m, nil
 
@@ -163,15 +171,14 @@ func main() {
 
 		lastViewID = selectedViewID
 
-		// Run the selected view with tcell
+		// Run the selected view with tcell. It sets returning when it played
+		// the closing half of the transition, so the menu plays the rest.
 		shouldContinue := runView(selectedViewID)
 
 		if !shouldContinue {
 			// User chose to quit from view
 			return
 		}
-		// Loop continues - return to selector, playing the transition back
-		returning = true
 	}
 }
 
@@ -194,44 +201,66 @@ func runSelector() string {
 // runView runs a view with tcell and returns whether to continue (true = back to selector, false = quit)
 func runView(viewID string) bool {
 	// Initialize tcell screen
-	screen, err := tcell.NewScreen()
+	raw, err := tcell.NewScreen()
 	if err != nil {
 		log.Fatalf("Failed to create screen: %v", err)
 	}
-	if err := screen.Init(); err != nil {
+	if err := raw.Init(); err != nil {
 		log.Fatalf("Failed to initialize screen: %v", err)
 	}
-	defer screen.Fini()
+	defer raw.Fini()
+
+	// The menu hands over the frame its transition ended on. While it is
+	// set, the view draws into the buffer without showing, then the split
+	// uncovers it.
+	menu := transition.Take()
+	if menu != nil {
+		if w, h := raw.Size(); h != len(menu.Rows) || (h > 0 && w != len(menu.Rows[0])) {
+			menu = nil // window changed size in between: skip the animation
+		}
+	}
+	screen := &transition.Offscreen{Screen: raw, Hold: menu != nil}
 
 	screen.SetStyle(tcell.StyleDefault.
 		Background(tcell.ColorBlack).
 		Foreground(tcell.ColorWhite))
-	screen.Clear()
+	if menu != nil {
+		// keep the line on screen while the view loads
+		transition.ShowLine(screen.Screen, menu)
+	} else {
+		screen.Clear()
+	}
 
 	// Load the view
 	registry := views.GetRegistry()
 	view, err := registry.Get(viewID)
 	if err != nil {
-		screen.Fini()
+		raw.Fini()
 		fmt.Printf("Error loading view: %v\n", err)
 		return false
 	}
 
 	if err := view.Init(screen); err != nil {
-		screen.Fini()
+		raw.Fini()
 		fmt.Printf("Error initializing view: %v\n", err)
 		return false
 	}
 
 	// View event loop
 	view.Render()
+	if menu != nil {
+		frame := transition.Capture(raw)
+		screen.Hold = false
+		transition.Open(raw, menu, frame)
+	}
 	for {
 		ev := screen.PollEvent()
 		err := view.HandleEvent(ev)
 
 		if err != nil {
 			if err.Error() == "back" {
-				// Return to selector
+				// Return to selector: close the split over the view first
+				closeOver(screen, view, menu)
 				view.Cleanup()
 				return true
 			} else if err.Error() == "quit" {
@@ -244,4 +273,22 @@ func runView(viewID string) bool {
 
 		view.Render()
 	}
+}
+
+// closeOver plays the split backwards over the view, ending on the line the
+// menu then shrinks into its entry. The menu backdrop outside the lines is the
+// frame the menu handed over; without one (or after a resize) there is no
+// animation and the menu plays nothing either.
+func closeOver(screen *transition.Offscreen, view views.View, menu *transition.Frame) {
+	w, h := screen.Size()
+	if menu == nil || h != len(menu.Rows) || (h > 0 && w != len(menu.Rows[0])) {
+		returning = false
+		return
+	}
+	screen.Hold = true
+	view.Render()
+	frame := transition.Capture(screen.Screen)
+	screen.Hold = false
+	transition.Close(screen.Screen, menu, frame)
+	returning = true
 }

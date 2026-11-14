@@ -7,17 +7,19 @@ import (
 	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
 )
 
-// The page transition played when entering a view from the menu (and backwards
-// when coming back):
+// The page transition between the menu and a view has two halves:
 //
-//  1. stretch: the selected entry turns into a line, growing from its centre
-//     to both edges of the window;
-//  2. split: the line splits in two that move to the top and bottom edges,
-//     clearing the screen between them.
+//  1. stretch (played here): the selected entry turns into a line, growing
+//     from its centre to both edges of the window;
+//  2. split (played by the view, see package ui/transition): the line splits
+//     in two that move to the top and bottom edges, uncovering the view.
+//
+// The view loads while the menu still shows the finished line, so the split
+// starts on real content. Coming back, the view plays the split backwards and
+// the menu then shrinks the line back into the entry.
 const (
 	stretchDuration = 220 * time.Millisecond
-	splitDuration   = 260 * time.Millisecond
-	transitionTotal = stretchDuration + splitDuration
+	transitionTotal = stretchDuration
 
 	lineRune  = '━'
 	lineColor = "\033[1;32m"
@@ -28,9 +30,9 @@ type transition struct {
 	reverse bool
 }
 
-// StartTransition begins the page transition. reverse plays it backwards (used
-// when returning to the menu). It reports false, starting nothing, when the
-// menu cannot be drawn at the current size.
+// StartTransition begins the stretch. reverse plays it backwards (used when
+// returning to the menu). It reports false, starting nothing, when the menu
+// cannot be drawn at the current size.
 func (s *BubbleTeaSelector) StartTransition(reverse bool) bool {
 	if _, _, ok := s.compose(); !ok {
 		return false
@@ -44,9 +46,9 @@ func (s *BubbleTeaSelector) Animating() bool { return s.trans != nil }
 
 // TransitionDone reports whether the running transition has finished. A
 // finished reverse transition is cleared so the menu shows again; a finished
-// forward one is kept, so every later render still shows its last frame (the
-// emptied screen) until the program exits and the view takes over. Clearing it
-// would let Bubble Tea draw one full menu frame right before quitting.
+// forward one is kept, so every later render still shows the full line until
+// the program exits and the view takes over. Clearing it would let Bubble Tea
+// draw one full menu frame right before quitting.
 func (s *BubbleTeaSelector) TransitionDone() bool {
 	if s.trans == nil {
 		return true
@@ -60,7 +62,19 @@ func (s *BubbleTeaSelector) TransitionDone() bool {
 	return true
 }
 
-// transitionView draws the current frame of the transition over the menu.
+// LineFrame is the menu with the selected entry fully turned into a line, as
+// terminal rows with ANSI colours, and the row of that line. It is the frame
+// the stretch ends on and the split starts from.
+func (s *BubbleTeaSelector) LineFrame() (lines []string, lineRow int, ok bool) {
+	lines, selRow, ok := s.compose()
+	if !ok {
+		return nil, 0, false
+	}
+	lines[selRow] = s.stretchRow(1)
+	return lines, selRow, true
+}
+
+// transitionView draws the current frame of the stretch over the menu.
 func (s *BubbleTeaSelector) transitionView(lines []string, selRow int) string {
 	elapsed := time.Since(s.trans.start)
 	if elapsed > transitionTotal {
@@ -69,27 +83,7 @@ func (s *BubbleTeaSelector) transitionView(lines []string, selRow int) string {
 	if s.trans.reverse {
 		elapsed = transitionTotal - elapsed
 	}
-
-	if elapsed < stretchDuration {
-		p := ease(float64(elapsed) / float64(stretchDuration))
-		lines[selRow] = s.stretchRow(p)
-		return strings.Join(lines, "\n")
-	}
-
-	// split: two full-width lines that reach the top and bottom edges at the
-	// same moment, blank between them
-	p := ease(float64(elapsed-stretchDuration) / float64(splitDuration))
-	top := selRow - int(p*float64(selRow)+0.5)
-	bottom := selRow + int(p*float64(s.height-1-selRow)+0.5)
-	full := lineColor + strings.Repeat(string(lineRune), s.width) + ansiReset
-	for y := range lines {
-		switch {
-		case y == top || y == bottom:
-			lines[y] = full
-		case y > top && y < bottom:
-			lines[y] = ""
-		}
-	}
+	lines[selRow] = s.stretchRow(ease(float64(elapsed) / float64(stretchDuration)))
 	return strings.Join(lines, "\n")
 }
 
