@@ -39,6 +39,10 @@ type model struct {
 // again when the user comes back from that view.
 var lastViewID string
 
+// returning is set when the selector is shown again after a view, so it opens
+// with the page transition played backwards.
+var returning bool
+
 func initialModel() model {
 	sel := selector.NewBubbleTeaSelector()
 	sel.SelectByID(lastViewID)
@@ -58,17 +62,35 @@ func tickCmd() tea.Cmd {
 	})
 }
 
+// frameMsg drives the page transition at a smoother rate than the spinner.
+type frameMsg time.Time
+
+func frameCmd() tea.Cmd {
+	return tea.Tick(16*time.Millisecond, func(t time.Time) tea.Msg {
+		return frameMsg(t)
+	})
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.selector.Animating() {
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			return m, nil // ignore keys while the transition plays
+		}
 		result := m.selector.HandleKey(msg)
 
 		if result == -2 {
 			// 用户按 q 或 ESC，不选择任何视图，直接退出
 			return m, tea.Quit
 		} else if result >= 0 {
-			// 用户按 Enter 或数字键选中视图
+			// 用户按 Enter 选中视图：先播放转场动画，结束后再退出
 			m.selectedViewID = m.selector.GetSelectedViewID()
+			if m.selector.StartTransition(false) {
+				return m, frameCmd()
+			}
 			return m, tea.Quit // 退出 Bubble Tea，返回 main 继续处理
 		}
 		return m, nil
@@ -77,6 +99,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.selector.SetSize(msg.Width, msg.Height)
+		if !m.ready {
+			m.ready = true
+			if returning && m.selector.StartTransition(true) {
+				returning = false
+				return m, frameCmd()
+			}
+		}
+		return m, nil
+
+	case frameMsg:
+		if !m.selector.TransitionDone() {
+			return m, frameCmd()
+		}
+		if m.selectedViewID != "" {
+			return m, tea.Quit // forward transition finished: open the view
+		}
 		return m, nil
 
 	case tickMsg:
@@ -132,7 +170,8 @@ func main() {
 			// User chose to quit from view
 			return
 		}
-		// Loop continues - return to selector
+		// Loop continues - return to selector, playing the transition back
+		returning = true
 	}
 }
 

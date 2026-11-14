@@ -19,6 +19,7 @@ type BubbleTeaSelector struct {
 	width       int
 	height      int
 	spinner     *animation.Spinner
+	trans       *transition // page transition in progress, nil when idle
 }
 
 // NewBubbleTeaSelector creates a new Bubble Tea selector
@@ -109,6 +110,21 @@ func (s *BubbleTeaSelector) View() string {
 		return "Loading..."
 	}
 
+	lines, selRow, ok := s.compose()
+	if !ok {
+		s.trans = nil
+		return strings.Join(lines, "\n")
+	}
+	if s.trans != nil {
+		return s.transitionView(lines, selRow)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// compose lays out the full menu screen, one string per terminal row, and
+// returns the row of the selected entry. ok is false when the window is too
+// small, in which case lines hold the notice instead.
+func (s *BubbleTeaSelector) compose() (lines []string, selRow int, ok bool) {
 	header, body, footer := s.headerLines(), s.bodyLines(), s.footerLines()
 	needW := 0
 	for _, part := range [][]menuLine{header, body, footer} {
@@ -119,7 +135,7 @@ func (s *BubbleTeaSelector) View() string {
 	// at least one blank row between the body and the header / footer
 	needH := len(header) + len(body) + len(footer) + 2
 	if s.width < needW || s.height < needH {
-		return s.tooSmallView(needW, needH)
+		return strings.Split(s.tooSmallView(needW, needH), "\n"), 0, false
 	}
 
 	// header sticks to the top, footer to the bottom, the menu sits in the
@@ -133,6 +149,7 @@ func (s *BubbleTeaSelector) View() string {
 	for i := 0; i < above; i++ {
 		texts = append(texts, "")
 	}
+	selRow = len(texts) + s.selectedIdx
 	for _, l := range body {
 		texts = append(texts, l.text)
 	}
@@ -142,7 +159,7 @@ func (s *BubbleTeaSelector) View() string {
 	for _, l := range footer {
 		texts = append(texts, l.text)
 	}
-	return strings.Join(texts, "\n")
+	return texts, selRow, true
 }
 
 func (s *BubbleTeaSelector) headerLines() []menuLine {
@@ -172,34 +189,42 @@ func (s *BubbleTeaSelector) footerLines() []menuLine {
 	}
 }
 
+// name returns the entry's label in the current language.
+func entryName(v views.Metadata) string {
+	if i18n.GetManager().IsEnglish() {
+		return v.NameEn
+	}
+	return v.NameZh
+}
+
+// entryWidth is the width of the widest entry including its spinner prefix.
+func (s *BubbleTeaSelector) entryWidth() int {
+	w := 0
+	for _, view := range s.viewList {
+		w = max(w, calculateDisplayWidth("⠋ "+entryName(view)))
+	}
+	return w
+}
+
+// entryStartX is the common left edge of the menu entries.
+func (s *BubbleTeaSelector) entryStartX() int {
+	return max((s.width-s.entryWidth())/2, 2)
+}
+
 // bodyLines are the menu entries, aligned on a common left edge.
 func (s *BubbleTeaSelector) bodyLines() []menuLine {
 	var lines []menuLine
-	add := func(text string, minWidth int) { lines = append(lines, menuLine{text, minWidth}) }
-
-	isEnglish := i18n.GetManager().IsEnglish()
-	name := func(v views.Metadata) string {
-		if isEnglish {
-			return v.NameEn
-		}
-		return v.NameZh
-	}
-
-	// align the entries on a common left edge
-	maxWidth := 0
-	for _, view := range s.viewList {
-		maxWidth = max(maxWidth, calculateDisplayWidth("⠋ "+name(view)))
-	}
-	startX := max((s.width-maxWidth)/2, 2)
+	maxWidth := s.entryWidth()
+	startX := s.entryStartX()
 
 	for idx, view := range s.viewList {
 		line := strings.Repeat(" ", startX)
 		if idx == s.selectedIdx {
-			line += fmt.Sprintf("%s%c %s%s", ansiGreen, s.spinner.GetFrame(), name(view), ansiReset)
+			line += fmt.Sprintf("%s%c %s%s", ansiGreen, s.spinner.GetFrame(), entryName(view), ansiReset)
 		} else {
-			line += "  " + name(view)
+			line += "  " + entryName(view)
 		}
-		add(line, maxWidth+4)
+		lines = append(lines, menuLine{line, maxWidth + 4})
 	}
 	return lines
 }

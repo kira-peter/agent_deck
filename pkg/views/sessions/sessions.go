@@ -36,6 +36,13 @@ type SessionsView struct {
 	searchQuery      string
 	filterIndex      int // 0=All 1=Today 2=Week 3=Month
 	displayedSessions []core.Session
+
+	// gapAt is the visible list row left blank while rows slide up after a
+	// delete; rows below it are drawn one row lower. -1 when not animating.
+	gapAt int
+
+	// dim is set while the list is drawn as the backdrop of a popup.
+	dim bool
 }
 
 // NewSessionsView creates a new sessions view
@@ -45,6 +52,7 @@ func NewSessionsView() views.View {
 		claudeDir:    core.NewClaudeDir(config.GetClaudeDir()),
 		selectedIdx:  0,
 		scrollOffset: 0,
+		gapAt:        -1,
 	}
 }
 
@@ -78,22 +86,64 @@ func (v *SessionsView) Init(screen tcell.Screen) error {
 }
 
 func (v *SessionsView) Render() error {
-	v.screen.Clear()
-
 	if v.detailMode {
+		v.screen.Clear()
 		v.renderDetail()
 	} else {
-		v.renderTitle()
-		v.renderTableHeader()
-		v.renderSessionList()
-		v.renderHints()
+		v.renderList(false)
 	}
-
 	v.screen.Show()
 	return nil
 }
 
+// renderList draws the whole list page without showing it. dim draws it in
+// gray, as the backdrop of a popup.
+func (v *SessionsView) renderList(dim bool) {
+	v.screen.Clear()
+	v.dim = dim
+	v.renderTitle()
+	v.renderTableHeader()
+	v.renderSessionList()
+	v.renderHints()
+	v.dim = false
+}
+
 // ── List view ──────────────────────────────────────────────────────────────
+
+// dimStyle is what everything on the list page is drawn with behind a popup.
+var dimStyle = tcell.StyleDefault.Foreground(tcell.NewRGBColor(90, 90, 90))
+
+// st returns style, or the dimmed style while a popup is open.
+func (v *SessionsView) st(style tcell.Style) tcell.Style {
+	if v.dim {
+		return dimStyle
+	}
+	return style
+}
+
+// sessionPath is the project folder a session belongs to, with the home
+// directory shortened to ~.
+func sessionPath(s core.Session) string {
+	p := s.ProjectPath
+	if home, err := os.UserHomeDir(); err == nil && home != "" &&
+		len(p) >= len(home) && strings.EqualFold(p[:len(home)], home) {
+		p = "~" + p[len(home):]
+	}
+	return p
+}
+
+// Column layout of the session table. The prompt column takes whatever width
+// is left at the end of the row.
+const (
+	colID     = 0
+	colPath   = 10
+	colPathW  = 43
+	colMsgs   = 55
+	colTime   = 65
+	colSize   = 80
+	colPrompt = 92
+	tableX    = 4
+)
 
 func (v *SessionsView) renderTitle() {
 	filterLabels := []i18n.Text{i18n.FilterAll, i18n.FilterToday, i18n.FilterWeek, i18n.FilterMonth}
@@ -104,44 +154,44 @@ func (v *SessionsView) renderTitle() {
 	if v.searchQuery != "" {
 		title += fmt.Sprintf(" [%s%s]", i18n.HintSearch.Get(), v.searchQuery)
 	}
-	v.drawCenteredText(1, title, tcell.StyleDefault.
-		Foreground(tcell.ColorLightGreen).Bold(true))
+	v.drawCenteredText(1, title, v.st(tcell.StyleDefault.
+		Foreground(tcell.ColorLightGreen).Bold(true)))
 	v.drawHorizontalLine(3)
 }
 
 func (v *SessionsView) renderTableHeader() {
 	y := 4
-	startX := 4
-
 	headers := []struct {
-		text  string
-		width int
+		text string
+		col  int
 	}{
-		{i18n.HeaderID.Get(), 10},
-		{i18n.HeaderFirstPrompt.Get(), 45},
-		{i18n.HeaderMessages.Get(), 10},
-		{i18n.HeaderTime.Get(), 15},
-		{i18n.HeaderSize.Get(), 10},
+		{i18n.HeaderID.Get(), colID},
+		{i18n.HeaderPath.Get(), colPath},
+		{i18n.HeaderMessages.Get(), colMsgs},
+		{i18n.HeaderTime.Get(), colTime},
+		{i18n.HeaderSize.Get(), colSize},
+		{i18n.HeaderFirstPrompt.Get(), colPrompt},
 	}
-
-	x := startX
+	style := v.st(tcell.StyleDefault.Foreground(tcell.ColorLightCyan).Bold(true))
 	for _, h := range headers {
-		v.drawText(x, y, h.text, tcell.StyleDefault.
-			Foreground(tcell.ColorLightCyan).Bold(true))
-		x += h.width
+		if tableX+h.col < v.width-2 {
+			v.drawText(tableX+h.col, y, h.text, style)
+		}
 	}
-
 	v.drawHorizontalLine(y + 1)
 }
 
+// maxListRows is how many list rows fit on a screen of the given height.
+func maxListRows(height int) int { return core.VisibleRows(height - 12) }
+
 func (v *SessionsView) renderSessionList() {
-	startY := 7
-	startX := 4
-	maxVisible := core.VisibleRows(v.height - 12)
+	startY := listStartY
+	startX := tableX
+	maxVisible := maxListRows(v.height)
 
 	if len(v.displayedSessions) == 0 {
 		v.drawCenteredText(startY+2, i18n.StatusNoData.Get(),
-			tcell.StyleDefault.Foreground(tcell.ColorGray))
+			v.st(tcell.StyleDefault.Foreground(tcell.ColorGray)))
 		return
 	}
 
@@ -152,9 +202,22 @@ func (v *SessionsView) renderSessionList() {
 		v.scrollOffset = v.selectedIdx - maxVisible + 1
 	}
 
-	for i := v.scrollOffset; i < len(v.displayedSessions) && i < v.scrollOffset+maxVisible; i++ {
+	for row := 0; row < maxVisible; row++ {
+		// while closing a gap, rows below it still show the session above
+		i := v.scrollOffset + row
+		if v.gapAt >= 0 {
+			if row == v.gapAt {
+				continue
+			}
+			if row > v.gapAt {
+				i--
+			}
+		}
+		if i >= len(v.displayedSessions) {
+			break
+		}
 		session := v.displayedSessions[i]
-		y := startY + (i - v.scrollOffset)
+		y := startY + row
 
 		style := tcell.StyleDefault.Foreground(tcell.ColorWhite)
 		if i == v.selectedIdx {
@@ -162,25 +225,30 @@ func (v *SessionsView) renderSessionList() {
 				Foreground(tcell.ColorBlack).
 				Background(tcell.ColorLightGreen)
 		}
+		style = v.st(style)
 
 		sessionID := session.ID
 		if len(sessionID) > 8 {
 			sessionID = sessionID[:8]
 		}
-		v.drawText(startX, y, fmt.Sprintf("%-8s", sessionID), style)
+		v.drawText(startX+colID, y, fmt.Sprintf("%-8s", sessionID), style)
 
-		prompt := session.FirstPrompt
-		if len(prompt) > 43 {
-			prompt = prompt[:40] + "..."
-		}
-		v.drawText(startX+10, y, fmt.Sprintf("%-43s", prompt), style)
+		path := textwidth.Truncate(sessionPath(session), colPathW)
+		v.drawText(startX+colPath, y, textwidth.PadRight(path, colPathW), style)
 
-		v.drawText(startX+55, y, fmt.Sprintf("%-8d", session.MessageCount), style)
+		v.drawText(startX+colMsgs, y, fmt.Sprintf("%-8d", session.MessageCount), style)
 
 		timeStr := core.FormatRelativeTime(session.Modified)
-		v.drawText(startX+65, y, fmt.Sprintf("%-13s", timeStr), style)
+		v.drawText(startX+colTime, y, fmt.Sprintf("%-13s", timeStr), style)
 
-		v.drawText(startX+80, y, core.FormatSize(session.Size), style)
+		v.drawText(startX+colSize, y, fmt.Sprintf("%-10s", core.FormatSize(session.Size)), style)
+
+		// the prompt fills the rest of the row; the selection bar runs to its end
+		if promptW := v.width - 2 - (startX + colPrompt); promptW > 0 {
+			prompt := strings.Join(strings.Fields(session.FirstPrompt), " ")
+			prompt = textwidth.Truncate(prompt, promptW)
+			v.drawText(startX+colPrompt, y, textwidth.PadRight(prompt, promptW), style)
+		}
 	}
 }
 
@@ -189,10 +257,10 @@ func (v *SessionsView) renderHints() {
 	v.drawHorizontalLine(y - 1)
 	if v.searchMode {
 		query := i18n.HintSearch.Get() + v.searchQuery + "█"
-		v.drawCenteredText(y, query, tcell.StyleDefault.Foreground(tcell.ColorYellow))
+		v.drawCenteredText(y, query, v.st(tcell.StyleDefault.Foreground(tcell.ColorYellow)))
 	} else {
 		hints := i18n.HintListActions.Get()
-		v.drawCenteredText(y, hints, tcell.StyleDefault.Foreground(tcell.ColorGray))
+		v.drawCenteredText(y, hints, v.st(tcell.StyleDefault.Foreground(tcell.ColorGray)))
 	}
 }
 
@@ -513,16 +581,15 @@ func (v *SessionsView) rebuildDisplay() {
 	v.scrollOffset = 0
 }
 
-// deleteSession deletes a session after the user confirms in a dialog.
+// deleteSession deletes a session after the user confirms in a dialog. The
+// delete animation is the feedback, so success shows no message box.
 func (v *SessionsView) deleteSession(session core.Session) {
 	if !v.confirmDeleteSession(session) {
 		return
 	}
 	if err := v.removeSession(session); err != nil {
 		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
-		return
 	}
-	v.showResultBox(i18n.MsgDeleteSuccess.Get(), tcell.ColorGreen, resultBoxSeconds)
 }
 
 // quickDeleteSession deletes a session immediately, without confirmation or a
@@ -533,12 +600,18 @@ func (v *SessionsView) quickDeleteSession(session core.Session) {
 	}
 }
 
-// removeSession deletes the session file, drops it from the list and keeps
-// the selection in range.
+// removeSession deletes the session files and then animates the row away: the
+// shot erases it, the session is dropped from the list and the rows below
+// slide up. The selection stays in range.
 func (v *SessionsView) removeSession(session core.Session) error {
 	if err := core.DeleteSessionFiles(session); err != nil {
 		return err
 	}
+
+	v.Render() // the list as it was, without any dialog on top
+	gap := v.selectedIdx - v.scrollOffset
+	v.animateShot(v.selectedRowY())
+
 	for i, s := range v.sessions {
 		if s.ID == session.ID {
 			v.sessions = append(v.sessions[:i], v.sessions[i+1:]...)
@@ -550,6 +623,9 @@ func (v *SessionsView) removeSession(session core.Session) error {
 	if n := len(v.displayedSessions); n > 0 {
 		v.selectedIdx = min(idx, n-1)
 		v.scrollOffset = min(offset, v.selectedIdx)
+	}
+	if v.scrollOffset == offset {
+		v.animateSlide(gap)
 	}
 	return nil
 }

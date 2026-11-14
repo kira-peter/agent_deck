@@ -57,10 +57,13 @@ func (v *SessionsView) confirmDeleteSession(session core.Session) bool {
 	}
 }
 
+// renderDeleteDialog draws the confirmation as a popup over the session list,
+// which stays visible (dimmed) behind it.
 func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
-	v.screen.Clear()
+	v.renderList(true)
 
 	details := []struct{ label, value string }{
+		{i18n.HeaderPath.Get(), sessionPath(session)},
 		{i18n.HeaderMessages.Get(), fmt.Sprintf("%d", session.MessageCount)},
 		{i18n.HeaderSize.Get(), core.FormatSize(session.Size)},
 		{i18n.HeaderTime.Get(), core.FormatRelativeTime(session.Modified)},
@@ -87,11 +90,12 @@ func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
 	)
 	boxW := min(max(content+2*pad+2, 48), v.width-4)
 	innerW := boxW - 2*pad - 2
-	const boxH = 15
+	const boxH = 16
 	x0 := max((v.width-boxW)/2, 0)
 	y0 := max((v.height-boxH)/2, 0)
 
 	borderStyle := tcell.StyleDefault.Foreground(tcell.ColorRed)
+	v.fillRect(x0, y0, boxW, boxH)
 	v.drawBox(x0, y0, boxW, boxH, borderStyle)
 
 	// Title embedded in the top border
@@ -108,7 +112,7 @@ func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
 	valueStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite)
 	for _, d := range details {
 		v.drawTextW(tx, y, d.label, labelStyle)
-		v.drawTextW(tx+labelW+3, y, d.value, valueStyle)
+		v.drawTextW(tx+labelW+3, y, cw.Truncate(d.value, innerW-labelW-3, "..."), valueStyle)
 		y++
 	}
 
@@ -144,9 +148,6 @@ func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
 
 	v.screen.Show()
 }
-
-// resultBoxSeconds is how long a success box stays up before closing itself.
-const resultBoxSeconds = 3
 
 // showResultBox displays a one-line message in a small box. With countdown > 0
 // it closes itself after that many seconds; with 0 it waits for a key. Any key
@@ -186,8 +187,9 @@ func (v *SessionsView) showResultBox(text string, color tcell.Color, countdown i
 	}
 }
 
+// renderResultBox draws a message popup over the session list.
 func (v *SessionsView) renderResultBox(text string, color tcell.Color, remaining int) {
-	v.screen.Clear()
+	v.renderList(true)
 
 	hint := i18n.DeleteDlgAnyKey.Get()
 	if remaining > 0 {
@@ -199,11 +201,21 @@ func (v *SessionsView) renderResultBox(text string, color tcell.Color, remaining
 	y0 := max((v.height-boxH)/2, 0)
 
 	style := tcell.StyleDefault.Foreground(color)
+	v.fillRect(x0, y0, boxW, boxH)
 	v.drawBox(x0, y0, boxW, boxH, style)
 	v.drawCenteredTextIn(x0, boxW, y0+2, cw.Truncate(text, boxW-4, "..."), style.Bold(true))
 	v.drawCenteredTextIn(x0, boxW, y0+4, hint, tcell.StyleDefault.Foreground(tcell.ColorGray))
 
 	v.screen.Show()
+}
+
+// fillRect blanks a rectangle so a popup hides what is under it.
+func (v *SessionsView) fillRect(x, y, w, h int) {
+	for j := 0; j < h; j++ {
+		for i := 0; i < w; i++ {
+			v.screen.SetContent(x+i, y+j, ' ', nil, tcell.StyleDefault)
+		}
+	}
 }
 
 func (v *SessionsView) drawBox(x, y, w, h int, style tcell.Style) {
