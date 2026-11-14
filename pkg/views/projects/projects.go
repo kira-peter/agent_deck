@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -404,10 +405,13 @@ func (v *ProjectsView) openProjectInClaude(projectPath, sessionID string) error 
 	// Use 'start' to open a new window
 	// The old call passed the project path as an argument to claude, which is
 	// redundant with -WorkingDirectory; only the resume flag is needed.
-	args := ""
+	// --name sets the terminal tab title to the project folder instead of the
+	// first message of the session.
+	argList := []string{"'--name'", "'" + psQuote(filepath.Base(projectPath)) + "'"}
 	if sessionID != "" {
-		args = fmt.Sprintf(" -ArgumentList '--resume','%s'", psQuote(sessionID))
+		argList = append(argList, "'--resume'", "'"+psQuote(sessionID)+"'")
 	}
+	args := " -ArgumentList " + strings.Join(argList, ",")
 	cmd := exec.Command("powershell", "-Command",
 		fmt.Sprintf("Start-Process -FilePath 'claude'%s -WorkingDirectory '%s'",
 			args, psQuote(projectPath)))
