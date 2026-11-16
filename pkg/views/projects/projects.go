@@ -12,6 +12,7 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/yourusername/claude-manager/pkg/core"
 	"github.com/yourusername/claude-manager/pkg/i18n"
+	"github.com/yourusername/claude-manager/pkg/ui/rowfx"
 	"github.com/yourusername/claude-manager/pkg/views"
 	"github.com/yourusername/claude-manager/pkg/views/dirpicker"
 )
@@ -26,14 +27,21 @@ var cw = func() *runewidth.Condition {
 
 // ProjectsView displays all projects
 type ProjectsView struct {
-	screen    tcell.Screen
-	projects  []core.Project
-	claudeDir *core.ClaudeDir
-	width     int
-	height    int
-	selectedIdx int
+	screen       tcell.Screen
+	projects     []core.Project
+	claudeDir    *core.ClaudeDir
+	width        int
+	height       int
+	selectedIdx  int
 	scrollOffset int
 	totalUsage   core.Usage
+
+	// gapAt is the visible project row left blank while rows slide up after
+	// a delete; rows below it are drawn one row lower. -1 when not animating.
+	gapAt int
+
+	// dim is set while the list is drawn as the backdrop of a popup.
+	dim bool
 }
 
 // NewProjectsView creates a new projects view
@@ -43,6 +51,7 @@ func NewProjectsView() views.View {
 		claudeDir:    core.NewClaudeDir(config.GetClaudeDir()),
 		selectedIdx:  -1, // 默认选中 "新项目" 选项
 		scrollOffset: 0,
+		gapAt:        -1,
 	}
 }
 
@@ -66,9 +75,17 @@ func (v *ProjectsView) Init(screen tcell.Screen) error {
 	if err != nil {
 		return err
 	}
+	sortProjects(projects)
 
-	// Sort by last activity (most recent first)
-	// For projects with no activity (0001-01-01), sort by path
+	v.projects = projects
+	v.refreshUsage()
+
+	return nil
+}
+
+// sortProjects orders projects by last activity (most recent first); projects
+// with no activity come last, sorted by path.
+func sortProjects(projects []core.Project) {
 	sort.Slice(projects, func(i, j int) bool {
 		// If both have valid activity times, compare them
 		if !projects[i].LastActivity.IsZero() && !projects[j].LastActivity.IsZero() {
@@ -84,11 +101,6 @@ func (v *ProjectsView) Init(screen tcell.Screen) error {
 		// Both have no activity, sort by path alphabetically
 		return projects[i].Path < projects[j].Path
 	})
-
-	v.projects = projects
-	v.refreshUsage()
-
-	return nil
 }
 
 // refreshUsage recomputes per-project usage and the all-projects total.
@@ -101,32 +113,40 @@ func (v *ProjectsView) refreshUsage() {
 }
 
 func (v *ProjectsView) Render() error {
-	v.screen.Clear()
-
-	// Title
-	v.renderTitle()
-
-	// Table header
-	v.renderTableHeader()
-
-	// Project list
-	v.renderProjectList()
-
-	// Usage of the selected project (or all projects)
-	v.renderUsagePanel()
-
-	// Hints
-	v.renderHints()
-
+	v.renderPage(false)
 	v.screen.Show()
 	return nil
+}
+
+// renderPage draws the whole page without showing it. dim draws it in gray,
+// as the backdrop of a popup.
+func (v *ProjectsView) renderPage(dim bool) {
+	v.screen.Clear()
+	v.dim = dim
+	v.renderTitle()
+	v.renderTableHeader()
+	v.renderProjectList()
+	v.renderUsagePanel()
+	v.renderHints()
+	v.dim = false
+}
+
+// dimStyle is what everything on the page is drawn with behind a popup.
+var dimStyle = tcell.StyleDefault.Foreground(tcell.NewRGBColor(90, 90, 90))
+
+// st returns style, or the dimmed style while a popup is open.
+func (v *ProjectsView) st(style tcell.Style) tcell.Style {
+	if v.dim {
+		return dimStyle
+	}
+	return style
 }
 
 func (v *ProjectsView) renderTitle() {
 	title := fmt.Sprintf("%s (%d)", i18n.ViewProjects.Get(), len(v.projects))
 	y := 1
-	v.drawCenteredText(y, title, tcell.StyleDefault.
-		Foreground(tcell.ColorLightGreen).Bold(true))
+	v.drawCenteredText(y, title, v.st(tcell.StyleDefault.
+		Foreground(tcell.ColorLightGreen).Bold(true)))
 	v.drawHorizontalLine(y + 2)
 }
 
@@ -146,23 +166,31 @@ func (v *ProjectsView) renderTableHeader() {
 
 	x := startX
 	for _, h := range headers {
-		v.drawText(x, y, h.text, tcell.StyleDefault.
-			Foreground(tcell.ColorLightCyan).Bold(true))
+		v.drawText(x, y, h.text, v.st(tcell.StyleDefault.
+			Foreground(tcell.ColorLightCyan).Bold(true)))
 		x += h.width
 	}
 
 	v.drawHorizontalLine(y + 1)
 }
 
-func (v *ProjectsView) renderProjectList() {
-	startY := 7
-	startX := 4
+// projectListY is the screen row of the first project (below the "new
+// project" row and its separator).
+const projectListY = 10
+
+// maxProjectRows is how many project rows the list shows at the current size.
+func (v *ProjectsView) maxProjectRows() int {
 	maxVisible := v.height - 12 // Leave space for title and hints
 	if v.usagePanelVisible() {
 		maxVisible = v.height - 19 // ...and for the usage panel
 	}
+	return core.VisibleRows(maxVisible) - 1 // -1 for the new project row
+}
 
-	maxVisible = core.VisibleRows(maxVisible)
+func (v *ProjectsView) renderProjectList() {
+	startY := 7
+	startX := 4
+	rows := v.maxProjectRows()
 
 	// 渲染 "新项目" 选项
 	newProjectStyle := tcell.StyleDefault.Foreground(tcell.ColorLightGreen).Bold(true)
@@ -171,7 +199,7 @@ func (v *ProjectsView) renderProjectList() {
 			Background(tcell.ColorDarkGreen).
 			Foreground(tcell.ColorWhite)
 	}
-	v.drawText(startX, startY, i18n.NewProjectOption.Get(), newProjectStyle)
+	v.drawText(startX, startY, i18n.NewProjectOption.Get(), v.st(newProjectStyle))
 
 	// 分隔线
 	v.drawHorizontalLine(startY + 1)
@@ -179,7 +207,7 @@ func (v *ProjectsView) renderProjectList() {
 	// 如果没有项目
 	if len(v.projects) == 0 {
 		v.drawCenteredText(startY+3, i18n.StatusNoData.Get(),
-			tcell.StyleDefault.Foreground(tcell.ColorGray))
+			v.st(tcell.StyleDefault.Foreground(tcell.ColorGray)))
 		return
 	}
 
@@ -192,15 +220,28 @@ func (v *ProjectsView) renderProjectList() {
 		if adjustedIdx < v.scrollOffset {
 			v.scrollOffset = adjustedIdx
 		}
-		if adjustedIdx >= v.scrollOffset+maxVisible-1 { // -1 for new project row
-			v.scrollOffset = adjustedIdx - maxVisible + 2
+		if adjustedIdx >= v.scrollOffset+rows {
+			v.scrollOffset = adjustedIdx - rows + 1
 		}
 	}
 
-	// 渲染可见的项目（从 startY + 3 开始，跳过新项目和分隔线）
-	for i := v.scrollOffset; i < len(v.projects) && i < v.scrollOffset+maxVisible-1; i++ {
+	// 渲染可见的项目（跳过新项目和分隔线）
+	for row := 0; row < rows; row++ {
+		// while closing a gap, rows below it still show the project above
+		i := v.scrollOffset + row
+		if v.gapAt >= 0 {
+			if row == v.gapAt {
+				continue
+			}
+			if row > v.gapAt {
+				i--
+			}
+		}
+		if i >= len(v.projects) {
+			break
+		}
 		project := v.projects[i]
-		y := startY + 3 + (i - v.scrollOffset)
+		y := projectListY + row
 
 		// Determine style
 		style := tcell.StyleDefault.Foreground(tcell.ColorWhite)
@@ -209,6 +250,7 @@ func (v *ProjectsView) renderProjectList() {
 				Foreground(tcell.ColorBlack).
 				Background(tcell.ColorLightGreen)
 		}
+		style = v.st(style)
 
 		// Path (truncate if too long)
 		path := project.Path
@@ -253,11 +295,11 @@ func (v *ProjectsView) renderUsagePanel() {
 	y := v.height - 10
 	v.drawHorizontalLine(y)
 
-	headerStyle := tcell.StyleDefault.Foreground(tcell.ColorLightCyan)
-	valueStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite)
+	headerStyle := v.st(tcell.StyleDefault.Foreground(tcell.ColorLightCyan))
+	valueStyle := v.st(tcell.StyleDefault.Foreground(tcell.ColorWhite))
 	x := 4
 
-	titleStyle := tcell.StyleDefault.Foreground(tcell.ColorLightGreen).Bold(true)
+	titleStyle := v.st(tcell.StyleDefault.Foreground(tcell.ColorLightGreen).Bold(true))
 	v.drawText(x, y+1, i18n.UsageTitle.Get()+": ", titleStyle)
 	v.drawText(x+cw.StringWidth(i18n.UsageTitle.Get())+2, y+1, scope, valueStyle)
 
@@ -295,7 +337,7 @@ func (v *ProjectsView) renderHints() {
 	v.drawHorizontalLine(y - 1)
 
 	hints := i18n.HintProjectActions.Get()
-	v.drawCenteredText(y, hints, tcell.StyleDefault.Foreground(tcell.ColorGray))
+	v.drawCenteredText(y, hints, v.st(tcell.StyleDefault.Foreground(tcell.ColorGray)))
 }
 
 func (v *ProjectsView) HandleEvent(event tcell.Event) error {
@@ -335,9 +377,7 @@ func (v *ProjectsView) HandleEvent(event tcell.Event) error {
 			case 'r', 'R': // Refresh
 				projects, err := v.claudeDir.GetProjects()
 				if err == nil {
-					sort.Slice(projects, func(i, j int) bool {
-						return projects[i].LastActivity.After(projects[j].LastActivity)
-					})
+					sortProjects(projects)
 					v.projects = projects
 					v.refreshUsage()
 				}
@@ -433,21 +473,41 @@ func (v *ProjectsView) openProjectInClaude(projectPath, sessionID string) error 
 	return fmt.Errorf("quit")
 }
 
-// deleteProject deletes a project after the user confirms in a dialog.
+// deleteProject deletes a project after the user confirms in a popup. The
+// delete animation is the feedback, so success shows no message box.
 func (v *ProjectsView) deleteProject(project core.Project) {
 	if v.confirmDeleteProject(project) {
-		v.performDelete(project)
+		v.removeProject(project)
 	}
-	v.reloadProjects()
 }
 
 // quickDeleteProject deletes a project immediately, without any confirmation
 // or success message. Failures are still reported.
 func (v *ProjectsView) quickDeleteProject(project core.Project) {
+	v.removeProject(project)
+}
+
+// removeProject deletes the project's directory and then animates its row
+// away: the shot erases it, the list is reloaded and the rows below slide up.
+// Failures are reported in a popup.
+func (v *ProjectsView) removeProject(project core.Project) {
 	if err := v.removeProjectDir(project); err != nil {
 		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
+		v.reloadProjects()
+		return
 	}
+
+	v.Render() // the list as it was, without any popup on top
+	gap := v.selectedIdx - v.scrollOffset
+	rowfx.Shot(v.screen, projectListY+gap)
+
+	offset := v.scrollOffset
 	v.reloadProjects()
+	v.scrollOffset = min(offset, max(v.selectedIdx, 0))
+	if v.scrollOffset == offset && v.selectedIdx >= 0 {
+		visible := min(v.maxProjectRows(), len(v.projects)-v.scrollOffset)
+		rowfx.Slide(gap, visible, func(at int) { v.gapAt = at }, func() { v.Render() })
+	}
 }
 
 // reloadProjects re-reads the project list and keeps the selection in range.
@@ -456,9 +516,7 @@ func (v *ProjectsView) reloadProjects() {
 	if err != nil {
 		return
 	}
-	sort.Slice(projects, func(i, j int) bool {
-		return projects[i].LastActivity.After(projects[j].LastActivity)
-	})
+	sortProjects(projects)
 	v.projects = projects
 	v.refreshUsage()
 
@@ -471,15 +529,6 @@ func (v *ProjectsView) reloadProjects() {
 func (v *ProjectsView) removeProjectDir(project core.Project) error {
 	claudeDir := core.GetConfig().GetClaudeDir()
 	return os.RemoveAll(fmt.Sprintf("%s/projects/%s", claudeDir, project.EncodedName))
-}
-
-// performDelete removes the project and reports the outcome in a result box.
-func (v *ProjectsView) performDelete(project core.Project) {
-	if err := v.removeProjectDir(project); err != nil {
-		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
-	} else {
-		v.showResultBox(i18n.DeleteDlgDone.Get(), tcell.ColorGreen, resultBoxSeconds)
-	}
 }
 
 // openNewProject 启动目录选择器以打开新项目

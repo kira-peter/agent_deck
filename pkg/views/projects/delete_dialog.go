@@ -48,8 +48,10 @@ func (v *ProjectsView) confirmDeleteProject(project core.Project) bool {
 	}
 }
 
+// renderDeleteDialog draws the confirmation as a popup over the project list,
+// which stays visible (dimmed) behind it.
 func (v *ProjectsView) renderDeleteDialog(project core.Project, sel int) {
-	v.screen.Clear()
+	v.renderPage(true)
 
 	lastActivity := core.FormatRelativeTime(project.LastActivity)
 	details := []struct{ label, value string }{
@@ -80,6 +82,7 @@ func (v *ProjectsView) renderDeleteDialog(project core.Project, sel int) {
 	y0 := max((v.height-boxH)/2, 0)
 
 	borderStyle := tcell.StyleDefault.Foreground(tcell.ColorRed)
+	v.fillRect(x0, y0, boxW, boxH)
 	v.drawBox(x0, y0, boxW, boxH, borderStyle)
 
 	// Title embedded in the top border
@@ -136,9 +139,6 @@ func (v *ProjectsView) renderDeleteDialog(project core.Project, sel int) {
 	v.screen.Show()
 }
 
-// resultBoxSeconds is how long a success box stays up before closing itself.
-const resultBoxSeconds = 3
-
 // showResultBox displays a one-line message in a small box. With countdown > 0
 // it closes itself after that many seconds; with 0 it waits for a key. Any key
 // closes it immediately.
@@ -177,8 +177,9 @@ func (v *ProjectsView) showResultBox(text string, color tcell.Color, countdown i
 	}
 }
 
+// renderResultBox draws a message popup over the project list.
 func (v *ProjectsView) renderResultBox(text string, color tcell.Color, remaining int) {
-	v.screen.Clear()
+	v.renderPage(true)
 
 	hint := i18n.DeleteDlgAnyKey.Get()
 	if remaining > 0 {
@@ -190,11 +191,21 @@ func (v *ProjectsView) renderResultBox(text string, color tcell.Color, remaining
 	y0 := max((v.height-boxH)/2, 0)
 
 	style := tcell.StyleDefault.Foreground(color)
+	v.fillRect(x0, y0, boxW, boxH)
 	v.drawBox(x0, y0, boxW, boxH, style)
-	v.drawCenteredTextIn(x0, boxW, y0+2, text, style.Bold(true))
+	v.drawCenteredTextIn(x0, boxW, y0+2, cw.Truncate(text, boxW-4, "..."), style.Bold(true))
 	v.drawCenteredTextIn(x0, boxW, y0+4, hint, tcell.StyleDefault.Foreground(tcell.ColorGray))
 
 	v.screen.Show()
+}
+
+// fillRect blanks a rectangle so a popup hides what is under it.
+func (v *ProjectsView) fillRect(x, y, w, h int) {
+	for j := 0; j < h; j++ {
+		for i := 0; i < w; i++ {
+			v.screen.SetContent(x+i, y+j, ' ', nil, tcell.StyleDefault)
+		}
+	}
 }
 
 func (v *ProjectsView) drawBox(x, y, w, h int, style tcell.Style) {

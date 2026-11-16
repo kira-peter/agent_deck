@@ -245,10 +245,6 @@ var (
 		En: "↑↓/jk: Select   Enter: Confirm   ESC: Cancel",
 		Zh: "↑↓/jk: 选择   Enter: 确认   ESC: 取消",
 	}
-	DeleteDlgDone = Text{
-		En: "Project deleted",
-		Zh: "项目已删除",
-	}
 	DeleteDlgFailed = Text{
 		En: "Delete failed",
 		Zh: "删除失败",
@@ -377,7 +373,6 @@ var (
 	// Session actions
 	MsgDeleteConfirm  = Text{En: "Delete Session", Zh: "删除会话"}
 	MsgArchiveConfirm = Text{En: "Archive Session", Zh: "归档会话"}
-	MsgDeleteSuccess  = Text{En: "Session deleted", Zh: "会话已删除"}
 	MsgArchiveSuccess = Text{En: "Session archived", Zh: "会话已归档"}
 	FilterAll         = Text{En: "All", Zh: "全部"}
 	FilterToday       = Text{En: "Today", Zh: "今天"}
