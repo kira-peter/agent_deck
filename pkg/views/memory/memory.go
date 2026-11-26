@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/yourusername/claude-manager/pkg/core"
-	"github.com/yourusername/claude-manager/pkg/i18n"
-	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
-	"github.com/yourusername/claude-manager/pkg/views"
+	"github.com/kira-peter/agentdeck/pkg/core"
+	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agentdeck/pkg/ui/textwidth"
+	"github.com/kira-peter/agentdeck/pkg/views"
 )
 
 // MemoryView lists every memory file Claude reads and shows its content.

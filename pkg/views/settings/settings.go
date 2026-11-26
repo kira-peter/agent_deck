@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/yourusername/claude-manager/pkg/core"
-	"github.com/yourusername/claude-manager/pkg/i18n"
-	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
-	"github.com/yourusername/claude-manager/pkg/views"
+	"github.com/kira-peter/agentdeck/pkg/core"
+	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agentdeck/pkg/ui/textwidth"
+	"github.com/kira-peter/agentdeck/pkg/views"
 )
 
-// SettingsView displays and edits Claude Manager and Claude Code settings.
+// SettingsView displays and edits AgentDeck and agent settings.
 type SettingsView struct {
 	screen tcell.Screen
 	config *core.Config

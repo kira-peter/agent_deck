@@ -87,13 +87,23 @@ func GetDefaultCodexDir() string {
 	return filepath.Join(home, ".codex")
 }
 
-// GetConfigDir returns the configuration directory path (~/.claude-manager)
+// GetConfigDir returns the configuration directory path (~/.agentdeck)
 func GetConfigDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".claude-manager")
+	return filepath.Join(home, ".agentdeck")
+}
+
+// legacyConfigPath is where the config lived before the project was renamed
+// from Claude Manager to AgentDeck.
+func legacyConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".claude-manager", "config.json")
 }
 
 // GetConfigPath returns the full path to the config file
@@ -101,8 +111,29 @@ func GetConfigPath() string {
 	return filepath.Join(GetConfigDir(), "config.json")
 }
 
+// migrateLegacyConfig copies the old ~/.claude-manager/config.json to the new
+// location the first time AgentDeck runs. The old file is left in place.
+func migrateLegacyConfig() {
+	newPath, oldPath := GetConfigPath(), legacyConfigPath()
+	if oldPath == "" {
+		return
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return // already migrated or created
+	}
+	data, err := os.ReadFile(oldPath)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+		return
+	}
+	_ = os.WriteFile(newPath, data, 0o644)
+}
+
 // LoadConfig loads configuration from file
 func LoadConfig() (*Config, error) {
+	migrateLegacyConfig()
 	configPath := GetConfigPath()
 
 	data, err := os.ReadFile(configPath)

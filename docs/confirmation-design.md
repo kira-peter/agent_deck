@@ -37,7 +37,7 @@
 ### 1. 选中"是，打开" + Enter
 - ✓ 启动新终端窗口
 - ✓ 运行 `claude <选定路径>`
-- ✓ claude-manager 退出
+- ✓ AgentDeck 退出
 
 ### 2. 选中"否，重新选择" + Enter
 - ✓ 返回目录选择器

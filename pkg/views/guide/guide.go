@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/yourusername/claude-manager/pkg/i18n"
-	"github.com/yourusername/claude-manager/pkg/views"
-	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
+	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agentdeck/pkg/views"
+	"github.com/kira-peter/agentdeck/pkg/ui/textwidth"
 )
 
 // GuideView displays documentation about Claude's memory system

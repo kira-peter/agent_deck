@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/yourusername/claude-manager/pkg/i18n"
-	"github.com/yourusername/claude-manager/pkg/ui/animation"
-	"github.com/yourusername/claude-manager/pkg/views"
+	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agentdeck/pkg/ui/animation"
+	"github.com/kira-peter/agentdeck/pkg/views"
 )
 
 // Selector is the main view selector

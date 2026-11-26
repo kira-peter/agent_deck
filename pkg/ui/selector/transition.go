@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yourusername/claude-manager/pkg/ui/textwidth"
+	"github.com/kira-peter/agentdeck/pkg/ui/textwidth"
 )
 
 // The page transition between the menu and a view has two halves:

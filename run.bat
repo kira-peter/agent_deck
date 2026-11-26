@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-echo Starting Claude Manager...
+echo Starting AgentDeck...
 echo.
-build\claude-manager.exe
+build\deck.exe
 pause

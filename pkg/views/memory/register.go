@@ -1,6 +1,6 @@
 package memory
 
-import "github.com/yourusername/claude-manager/pkg/views"
+import "github.com/kira-peter/agentdeck/pkg/views"
 
 func init() {
 	views.Register(NewMemoryView)

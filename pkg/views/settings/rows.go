@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yourusername/claude-manager/pkg/core"
-	"github.com/yourusername/claude-manager/pkg/i18n"
+	"github.com/kira-peter/agentdeck/pkg/core"
+	"github.com/kira-peter/agentdeck/pkg/i18n"
 )
 
 type rowKind int
@@ -89,7 +89,7 @@ func (v *SettingsView) buildRows() []row {
 	cfg := v.config
 	disp := cfg.GetDisplay()
 
-	// ── Claude Manager ─────────────────────────────────────────────────
+	// ── AgentDeck ─────────────────────────────────────────────────
 	rows = append(rows, row{kind: kindHeader, label: i18n.SetSecManager.Get()})
 
 	saveDisp := func(fn func(*core.DisplayConfig)) error { return cfg.UpdateDisplay(fn) }

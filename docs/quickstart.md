@@ -11,13 +11,13 @@
    或者直接使用 go：
 
    ```bash
-   go build -o build/claude-manager.exe ./cmd/claude-manager
+   go build -o build/deck.exe ./cmd/deck
    ```
 
 2. **运行程序**
 
    ```bash
-   ./build/claude-manager.exe
+   ./build/deck.exe
    ```
 
    Windows 下也可以双击 `run.bat`。
@@ -28,7 +28,7 @@
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│                  Claude Manager                        │
+│                    AgentDeck                           │
 │                  2026-10-27 17:20                      │
 ├────────────────────────────────────────────────────────┤
 │                 ⠙ Overview                             │
@@ -125,7 +125,7 @@
 
 ## 配置文件
 
-位置：`C:\Users\<用户名>\.claude-manager\config.json`（其他平台为 `~/.claude-manager/config.json`）
+位置：`C:\Users\<用户名>\.agentdeck\config.json`（其他平台为 `~/.agentdeck/config.json`）
 
 ```json
 {
@@ -186,7 +186,7 @@ A: 按 `T`，主菜单和设置页都支持，切换后自动保存。
 A: 确保终端支持 UTF-8 和 Unicode；Windows 推荐 Windows Terminal。
 
 **Q: 如何自定义 Claude 目录位置？**
-A: 手动编辑 `~/.claude-manager/config.json` 中的 `claudeDir`，然后重启程序。
+A: 手动编辑 `~/.agentdeck/config.json` 中的 `claudeDir`，然后重启程序。
 
 **Q: 打开项目没反应 / 报错？**
 A: "打开项目"通过 PowerShell 的 `Start-Process` 启动新窗口，目前仅支持 Windows，且要求 `claude` 在 PATH 中。
@@ -229,8 +229,8 @@ A: 整个 `.claude/projects/<编码名>/` 目录，包括该项目所有会话�
 
 ## English Quick Start
 
-1. Build: `make build` (or `go build -o build/claude-manager.exe ./cmd/claude-manager`)
-2. Run: `./build/claude-manager.exe`
+1. Build: `make build` (or `go build -o build/deck.exe ./cmd/deck`)
+2. Run: `./build/deck.exe`
 
 Main menu: `↑↓/jk` navigate, `Enter` select, `T` toggle language, `Q`/`ESC` quit.
 

@@ -1,9 +1,9 @@
 .PHONY: build run clean install test
 
 # Build variables
-BINARY_NAME=claude-manager
+BINARY_NAME=deck
 BUILD_DIR=build
-MAIN_PATH=./cmd/claude-manager
+MAIN_PATH=./cmd/deck
 
 # Go parameters
 GOCMD=go
@@ -18,7 +18,7 @@ GOMOD=$(GOCMD) mod
 # which is the build time anyway. Pass one explicitly when needed:
 #   make build BUILD_TIME=2026-10-27T17:20
 BUILD_TIME ?=
-VERSION_PKG=github.com/yourusername/claude-manager/pkg/core
+VERSION_PKG=github.com/kira-peter/agentdeck/pkg/core
 LDFLAGS=-ldflags "-s -w $(if $(BUILD_TIME),-X $(VERSION_PKG).BuildTime=$(BUILD_TIME),)"
 
 # OS-specific commands

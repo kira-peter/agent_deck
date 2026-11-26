@@ -10,11 +10,11 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/mattn/go-runewidth"
-	"github.com/yourusername/claude-manager/pkg/core"
-	"github.com/yourusername/claude-manager/pkg/i18n"
-	"github.com/yourusername/claude-manager/pkg/ui/rowfx"
-	"github.com/yourusername/claude-manager/pkg/views"
-	"github.com/yourusername/claude-manager/pkg/views/dirpicker"
+	"github.com/kira-peter/agentdeck/pkg/core"
+	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agentdeck/pkg/ui/rowfx"
+	"github.com/kira-peter/agentdeck/pkg/views"
+	"github.com/kira-peter/agentdeck/pkg/views/dirpicker"
 )
 
 // cw measures display width the way terminals draw it: CJK is two cells, but

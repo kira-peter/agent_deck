@@ -22,7 +22,7 @@ Projects 视图顶部的"开启新项目"选项会打开一个类似 macOS Finde
 ```powershell
 cd D:\jarvis\claude_manager
 make build
-.\build\claude-manager.exe
+.\build\deck.exe
 ```
 
 ### 2. 进入 Projects 视图
@@ -175,7 +175,7 @@ make build
 **验证点**：
 - ✓ 应该启动新的终端窗口
 - ✓ 新窗口运行 `claude D:\jarvis\test-project`
-- ✓ claude-manager 应退出
+- ✓ AgentDeck 应退出
 
 #### 7.4 取消重选 - Enter 键
 **操作**：

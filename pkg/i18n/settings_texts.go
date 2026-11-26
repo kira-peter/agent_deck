@@ -2,7 +2,7 @@ package i18n
 
 // Texts for the settings view.
 var (
-	SetSecManager = Text{En: "Claude Manager", Zh: "Claude Manager 设置"}
+	SetSecManager = Text{En: "AgentDeck", Zh: "AgentDeck 设置"}
 	SetSecClaude  = Text{En: "Claude Code (settings.json)", Zh: "Claude Code 设置 (settings.json)"}
 	SetSecEnv     = Text{En: "Environment variables (env)", Zh: "环境变量 (env)"}
 	SetSecFiles   = Text{En: "Files & folders", Zh: "文件与目录"}

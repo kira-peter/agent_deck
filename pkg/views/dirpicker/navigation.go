@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yourusername/claude-manager/pkg/i18n"
+	"github.com/kira-peter/agentdeck/pkg/i18n"
 )
 
 // navigateLeft 返回上级目录

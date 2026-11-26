@@ -18,12 +18,12 @@ func (t Text) Get() string {
 var (
 	// Main title
 	AppTitle = Text{
-		En: "Claude Manager - Session & Memory Management",
-		Zh: "Claude Manager - 会话和记忆管理工具",
+		En: "AgentDeck - Coding Agent Session Manager",
+		Zh: "AgentDeck - 编程助手会话管理工具",
 	}
 	AppTitleCodex = Text{
-		En: "Claude Manager · Codex",
-		Zh: "Claude Manager · Codex",
+		En: "AgentDeck · Codex",
+		Zh: "AgentDeck · Codex",
 	}
 
 	// View names

@@ -1,4 +1,4 @@
-module github.com/yourusername/claude-manager
+module github.com/kira-peter/agentdeck
 
 go 1.25.5
 
