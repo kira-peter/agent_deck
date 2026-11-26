@@ -493,6 +493,8 @@ func (v *ProjectsView) quickDeleteProject(project core.Project) {
 // the shot erases it, the list is reloaded and the rows below slide up.
 // Failures are reported in a popup.
 func (v *ProjectsView) removeProject(project core.Project) {
+	v.renderPage(true) // keep the dimmed backdrop while the agent CLI runs
+	v.screen.Show()
 	if err := v.src.DeleteProject(project); err != nil {
 		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
 		v.reloadProjects()

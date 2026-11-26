@@ -92,7 +92,7 @@ make build BUILD_TIME=2026-10-27T17:20
 | 指南 | `↑↓/jk` 滚动，`ESC` 返回 |
 | 设置 | `↑↓/jk` 选择，`Enter` 修改或打开，`x` 清除，`R` 重新加载，`T` 切换语言，`ESC` 返回 |
 
-Codex 模式下暂不支持删除和归档，按下时会弹出提示，不会改动任何文件。
+Codex 模式下的删除和归档通过 `codex delete` / `codex archive` 完成，Codex 自己的索引会同步更新。
 
 ### 目录选择器
 
@@ -172,7 +172,8 @@ Codex 模式下暂不支持删除和归档，按下时会弹出提示，不会�
 - **项目**：Codex 没有项目目录，按每个会话 `session_meta` 里的工作目录 `cwd` 分组
 - **会话标题**：优先用 `session_index.jsonl` 中的标题，否则取第一条用户输入（跳过 Codex 自动注入的环境信息）
 - **用量**：取会话中最后一次 `token_count` 的累计值；Codex 不记录代码增删行数，显示为 `-`
-- **只读**：不修改 Codex 的任何文件，删除和归档留待后续通过 `codex delete` 实现
+- **删除与归档**：不直接改文件，调用 `codex delete` / `codex archive`。Codex 在 sqlite 中记录了会话文件的绝对路径，直接删文件会让索引失效。归档后的文件在 `archived_sessions/`
+- **删除项目**：逐个删除该工作目录下的全部 Codex 会话
 
 ## 项目结构
 
@@ -227,7 +228,7 @@ agentdeck/
 ## 已知限制
 
 - "打开项目"通过 PowerShell `Start-Process` 启动新窗口，目前仅适用于 Windows
-- Codex 模式暂不支持删除、归档、记忆页和设置项编辑
+- Codex 模式暂不支持记忆页和设置项编辑
 - Codex 没有设置终端标题的参数，打开后的标签名由 Codex 决定
 - 在 VS Code 内置终端中，`F1` 可能被 VS Code 拦截为命令面板
 - 目录选择器最多同时显示 5 列，更深的路径靠横向滚动

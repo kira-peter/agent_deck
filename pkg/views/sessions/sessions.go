@@ -3,7 +3,6 @@ package sessions
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -453,10 +452,7 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 				v.quickDeleteSession(v.displayedSessions[v.selectedIdx])
 			}
 		case 'a', 'A':
-			if !v.src.CanDelete() {
-				// archiving moves files, which would break Codex's own indexes
-				v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
-			} else if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
+			if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
 				v.archiveSession(v.displayedSessions[v.selectedIdx])
 			}
 		case '/':
@@ -593,7 +589,7 @@ func (v *SessionsView) deleteSession(session core.Session) {
 	if !v.confirmDeleteSession(session) {
 		return
 	}
-	if err := v.removeSession(session); err != nil {
+	if err := v.removeSession(session, v.src.DeleteSession); err != nil {
 		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
 	}
 }
@@ -605,16 +601,33 @@ func (v *SessionsView) quickDeleteSession(session core.Session) {
 		v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
 		return
 	}
-	if err := v.removeSession(session); err != nil {
+	if err := v.removeSession(session, v.src.DeleteSession); err != nil {
 		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
 	}
 }
 
-// removeSession deletes the session files and then animates the row away: the
-// shot erases it, the session is dropped from the list and the rows below
-// slide up. The selection stays in range.
-func (v *SessionsView) removeSession(session core.Session) error {
-	if err := v.src.DeleteSession(session); err != nil {
+// archiveSession moves a session out of the list after the user confirms.
+// Like delete, the row animation is the feedback on success.
+func (v *SessionsView) archiveSession(session core.Session) {
+	if !v.src.CanDelete() {
+		v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
+		return
+	}
+	if !v.confirmArchiveSession(session) {
+		return
+	}
+	if err := v.removeSession(session, v.src.ArchiveSession); err != nil {
+		v.showResultBox(fmt.Sprintf("%s: %v", i18n.ArchiveDlgFailed.Get(), err), tcell.ColorRed, 0)
+	}
+}
+
+// removeSession runs op (delete or archive) on the session and then animates
+// the row away: the shot erases it, the session is dropped from the list and
+// the rows below slide up. The selection stays in range.
+func (v *SessionsView) removeSession(session core.Session, op func(core.Session) error) error {
+	v.renderList(true) // keep the dimmed backdrop while the agent CLI runs
+	v.screen.Show()
+	if err := op(session); err != nil {
 		return err
 	}
 
@@ -638,58 +651,6 @@ func (v *SessionsView) removeSession(session core.Session) error {
 		v.animateSlide(gap)
 	}
 	return nil
-}
-
-func (v *SessionsView) archiveSession(session core.Session) {
-	v.screen.Clear()
-	y := v.height/2 - 3
-	v.drawCenteredText(y, i18n.MsgArchiveConfirm.Get(),
-		tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true))
-	y += 2
-	prompt := session.FirstPrompt
-	if len(prompt) > v.width-10 {
-		prompt = prompt[:v.width-13] + "..."
-	}
-	v.drawCenteredText(y, prompt, tcell.StyleDefault.Foreground(tcell.ColorWhite))
-	y += 2
-	archiveDir := filepath.Join(filepath.Dir(session.FilePath), "archived")
-	dest := filepath.Join(archiveDir, filepath.Base(session.FilePath))
-	v.drawCenteredText(y, fmt.Sprintf("→ %s", archiveDir),
-		tcell.StyleDefault.Foreground(tcell.ColorGray))
-	y += 2
-	v.drawCenteredText(y, fmt.Sprintf("%s  %s", i18n.ConfirmYes.Get(), i18n.ConfirmNo.Get()),
-		tcell.StyleDefault.Foreground(tcell.ColorLightCyan))
-	v.screen.Show()
-
-	ev := v.screen.PollEvent()
-	if keyEv, ok := ev.(*tcell.EventKey); ok {
-		if keyEv.Rune() == 'y' || keyEv.Rune() == 'Y' {
-			var err error
-			if err = os.MkdirAll(archiveDir, 0o755); err == nil {
-				err = os.Rename(session.FilePath, dest)
-			}
-			v.screen.Clear()
-			mid := v.height / 2
-			if err != nil {
-				v.drawCenteredText(mid, fmt.Sprintf("Error: %v", err),
-					tcell.StyleDefault.Foreground(tcell.ColorRed))
-			} else {
-				v.drawCenteredText(mid, i18n.MsgArchiveSuccess.Get(),
-					tcell.StyleDefault.Foreground(tcell.ColorGreen))
-				for i, s := range v.sessions {
-					if s.ID == session.ID {
-						v.sessions = append(v.sessions[:i], v.sessions[i+1:]...)
-						break
-					}
-				}
-				v.rebuildDisplay()
-			}
-			v.drawCenteredText(mid+2, "按任意键继续...",
-				tcell.StyleDefault.Foreground(tcell.ColorGray))
-			v.screen.Show()
-			v.screen.PollEvent()
-		}
-	}
 }
 
 // wordWrap splits a string into lines of at most maxWidth runes.

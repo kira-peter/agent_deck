@@ -66,6 +66,10 @@ func (v *ProjectsView) renderDeleteDialog(project core.Project, sel int) {
 
 	title := i18n.DeleteDlgTitle.Get()
 	warning := i18n.DeleteDlgWarning.Get()
+	if v.src.Kind() == core.SourceCodex {
+		// Codex keeps no per-project memory: only the sessions go
+		warning = i18n.DeleteDlgCodexWarning.Get()
+	}
 	hint := i18n.DeleteDlgHint.Get()
 
 	const pad = 3 // inner horizontal padding

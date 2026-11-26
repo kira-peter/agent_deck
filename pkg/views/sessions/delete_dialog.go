@@ -24,12 +24,51 @@ const (
 	deleteOptDelete = 1
 )
 
-// confirmDeleteSession shows a modal confirmation box and reports whether the
-// user chose to delete. The default selection is Cancel.
+// sessionAction describes a confirm popup for an action on one session.
+type sessionAction struct {
+	title   i18n.Text
+	warning i18n.Text
+	confirm i18n.Text
+	color   tcell.Color // border and confirm button
+	// extra is one more detail row (label, value); empty label means none
+	extra func(s core.Session) (string, string)
+}
+
+var (
+	deleteAction = sessionAction{
+		title:   i18n.MsgDeleteConfirm,
+		warning: i18n.DeleteDlgSessionWarning,
+		confirm: i18n.DeleteDlgConfirm,
+		color:   tcell.ColorRed,
+	}
+	archiveAction = sessionAction{
+		title:   i18n.MsgArchiveConfirm,
+		warning: i18n.ArchiveDlgWarning,
+		confirm: i18n.ArchiveDlgConfirm,
+		color:   tcell.ColorYellow,
+	}
+)
+
+// confirmDeleteSession shows the delete popup and reports whether the user
+// chose to delete. The default selection is Cancel.
 func (v *SessionsView) confirmDeleteSession(session core.Session) bool {
+	return v.confirmAction(deleteAction, session)
+}
+
+// confirmArchiveSession shows the archive popup, naming the folder the
+// session will be moved to.
+func (v *SessionsView) confirmArchiveSession(session core.Session) bool {
+	a := archiveAction
+	a.extra = func(s core.Session) (string, string) {
+		return i18n.ArchiveDlgTarget.Get(), v.src.ArchiveDir(s)
+	}
+	return v.confirmAction(a, session)
+}
+
+func (v *SessionsView) confirmAction(a sessionAction, session core.Session) bool {
 	sel := deleteOptCancel
 	for {
-		v.renderDeleteDialog(session, sel)
+		v.renderActionDialog(a, session, sel)
 
 		switch ev := v.screen.PollEvent().(type) {
 		case *tcell.EventResize:
@@ -57,9 +96,24 @@ func (v *SessionsView) confirmDeleteSession(session core.Session) bool {
 	}
 }
 
-// renderDeleteDialog draws the confirmation as a popup over the session list,
-// which stays visible (dimmed) behind it.
+// confirmStyle is the selected confirm button: white on red for delete,
+// black on light backgrounds such as yellow so the text stays readable.
+func confirmStyle(bg tcell.Color) tcell.Style {
+	fg := tcell.ColorWhite
+	if bg == tcell.ColorYellow {
+		fg = tcell.ColorBlack
+	}
+	return tcell.StyleDefault.Foreground(fg).Background(bg).Bold(true)
+}
+
+// renderDeleteDialog draws the delete popup (kept for callers and tests).
 func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
+	v.renderActionDialog(deleteAction, session, sel)
+}
+
+// renderActionDialog draws the confirmation as a popup over the session list,
+// which stays visible (dimmed) behind it.
+func (v *SessionsView) renderActionDialog(a sessionAction, session core.Session, sel int) {
 	v.renderList(true)
 
 	details := []struct{ label, value string }{
@@ -68,13 +122,18 @@ func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
 		{i18n.HeaderSize.Get(), core.FormatSize(session.Size)},
 		{i18n.HeaderTime.Get(), core.FormatRelativeTime(session.Modified)},
 	}
+	if a.extra != nil {
+		if label, value := a.extra(session); label != "" {
+			details = append(details, struct{ label, value string }{label, value})
+		}
+	}
 	labelW := 0
 	for _, d := range details {
 		labelW = max(labelW, cw.StringWidth(d.label))
 	}
 
-	title := i18n.MsgDeleteConfirm.Get()
-	warning := i18n.DeleteDlgSessionWarning.Get()
+	title := a.title.Get()
+	warning := a.warning.Get()
 	hint := i18n.DeleteDlgHint.Get()
 	prompt := strings.Join(strings.Fields(session.FirstPrompt), " ")
 	if prompt == "" {
@@ -90,11 +149,11 @@ func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
 	)
 	boxW := min(max(content+2*pad+2, 48), v.width-4)
 	innerW := boxW - 2*pad - 2
-	const boxH = 16
+	boxH := 12 + len(details)
 	x0 := max((v.width-boxW)/2, 0)
 	y0 := max((v.height-boxH)/2, 0)
 
-	borderStyle := tcell.StyleDefault.Foreground(tcell.ColorRed)
+	borderStyle := tcell.StyleDefault.Foreground(a.color)
 	v.fillRect(x0, y0, boxW, boxH)
 	v.drawBox(x0, y0, boxW, boxH, borderStyle)
 
@@ -126,7 +185,7 @@ func (v *SessionsView) renderDeleteDialog(session core.Session, sel int) {
 		selected tcell.Style
 	}{
 		{i18n.DeleteDlgCancel.Get(), tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorLightGreen)},
-		{i18n.DeleteDlgConfirm.Get(), tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorRed).Bold(true)},
+		{a.confirm.Get(), confirmStyle(a.color)},
 	}
 	for i, o := range options {
 		style := tcell.StyleDefault.Foreground(tcell.ColorWhite)

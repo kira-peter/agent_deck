@@ -45,6 +45,11 @@ type Source interface {
 	CanDelete() bool
 	DeleteSession(s Session) error
 	DeleteProject(p Project) error
+	// ArchiveSession moves s out of the active session list; where to is
+	// the agent's own convention.
+	ArchiveSession(s Session) error
+	// ArchiveDir is where archived sessions of s end up, for display.
+	ArchiveDir(s Session) string
 
 	// LaunchArgs is the command line that opens the agent in projectPath,
 	// resuming sessionID when it is not empty. title, when supported, names
@@ -90,6 +95,20 @@ func (cd *ClaudeDir) GetSessionMessages(s Session, maxMessages int) ([]SessionMe
 }
 
 func (cd *ClaudeDir) DeleteSession(s Session) error { return DeleteSessionFiles(s) }
+
+// ArchiveDir is the archived/ folder next to the session file.
+func (cd *ClaudeDir) ArchiveDir(s Session) string {
+	return filepath.Join(filepath.Dir(s.FilePath), "archived")
+}
+
+// ArchiveSession moves the session file into archived/ beside it.
+func (cd *ClaudeDir) ArchiveSession(s Session) error {
+	dir := cd.ArchiveDir(s)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return os.Rename(s.FilePath, filepath.Join(dir, filepath.Base(s.FilePath)))
+}
 
 // DeleteProject removes the project's directory from projects/.
 func (cd *ClaudeDir) DeleteProject(p Project) error {

@@ -2,10 +2,14 @@ package core
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,7 +20,8 @@ import (
 // CodexDir reads the local data of the Codex CLI (~/.codex). Codex stores
 // every session as sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl, so unlike
 // Claude Code there are no project folders: projects are the distinct working
-// directories (session_meta.cwd) of the sessions. Read only.
+// directories (session_meta.cwd) of the sessions. The files are only read;
+// deleting and archiving are left to the codex CLI.
 type CodexDir struct {
 	Path string
 
@@ -46,16 +51,94 @@ func (cx *CodexDir) Dir() string        { return cx.Path }
 func (cx *CodexDir) ConfigPath() string { return filepath.Join(cx.Path, "config.toml") }
 func (cx *CodexDir) HasLineStats() bool { return false }
 
-// Deleting goes through `codex delete` so Codex's own indexes stay
-// consistent; that comes in a later version.
-func (cx *CodexDir) CanDelete() bool { return false }
+// Deleting and archiving go through the codex CLI (`codex delete`, `codex
+// archive`), so Codex's own sqlite indexes stay consistent with the files.
+func (cx *CodexDir) CanDelete() bool { return true }
 
-func (cx *CodexDir) DeleteSession(Session) error {
-	return fmt.Errorf("deleting Codex sessions is not supported yet")
+// DeleteSession permanently deletes s with `codex delete`.
+func (cx *CodexDir) DeleteSession(s Session) error {
+	if err := runCodex(cx.Path, "delete", s.ID); err != nil {
+		return err
+	}
+	// trust the files, not just the exit code
+	if _, err := os.Stat(s.FilePath); err == nil {
+		return fmt.Errorf("codex delete reported success but %s is still there", filepath.Base(s.FilePath))
+	}
+	cx.forget(s.ID)
+	return nil
 }
 
-func (cx *CodexDir) DeleteProject(Project) error {
-	return fmt.Errorf("deleting Codex projects is not supported yet")
+// DeleteProject deletes every session whose working directory is p. It
+// stops at the first failure; sessions deleted before that stay deleted.
+func (cx *CodexDir) DeleteProject(p Project) error {
+	sessions, err := cx.GetProjectSessions(p)
+	if err != nil {
+		return err
+	}
+	for i, s := range sessions {
+		if err := cx.DeleteSession(s); err != nil {
+			return fmt.Errorf("%d/%d: %w", i+1, len(sessions), err)
+		}
+	}
+	return nil
+}
+
+// ArchiveDir is where `codex archive` moves rollouts.
+func (cx *CodexDir) ArchiveDir(Session) string {
+	return filepath.Join(cx.Path, "archived_sessions")
+}
+
+// ArchiveSession archives s with `codex archive`; the rollout moves to
+// archived_sessions/ and drops out of the session list.
+func (cx *CodexDir) ArchiveSession(s Session) error {
+	if err := runCodex(cx.Path, "archive", s.ID); err != nil {
+		return err
+	}
+	cx.forget(s.ID)
+	return nil
+}
+
+// forget drops a session from the cached scan so lists reloaded from this
+// CodexDir no longer show it.
+func (cx *CodexDir) forget(id string) {
+	cx.load() // make sure the cache is filled before editing it
+	for i, s := range cx.sessions {
+		if s.ID == id {
+			cx.sessions = append(cx.sessions[:i], cx.sessions[i+1:]...)
+			break
+		}
+	}
+	delete(cx.usage, id)
+}
+
+// codexTimeout bounds one codex CLI call; delete/archive normally take well
+// under a second.
+const codexTimeout = 30 * time.Second
+
+// runCodex runs `codex <args>` against the Codex home dir and turns a
+// failure into an error carrying codex's own message.
+func runCodex(home string, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), codexTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "codex", args...)
+	cmd.Env = append(os.Environ(), "CODEX_HOME="+home)
+	cmd.Stdin = nil
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = io.Discard
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("codex %s timed out", args[0])
+	}
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		msg = strings.TrimPrefix(msg, "Error: ")
+		if msg == "" {
+			msg = err.Error()
+		}
+		return fmt.Errorf("codex %s: %s", args[0], msg)
+	}
+	return nil
 }
 
 // LaunchArgs opens codex in projectPath. Codex has no option to name the

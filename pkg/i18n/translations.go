@@ -237,6 +237,10 @@ var (
 		En: "This session will be permanently deleted.",
 		Zh: "将永久删除该会话，无法恢复",
 	}
+	DeleteDlgCodexWarning = Text{
+		En: "All Codex sessions in this folder will be permanently deleted.",
+		Zh: "将永久删除该目录下的全部 Codex 会话，无法恢复",
+	}
 	DeleteDlgCancel = Text{
 		En: "Cancel",
 		Zh: "取消",
@@ -377,7 +381,10 @@ var (
 	// Session actions
 	MsgDeleteConfirm  = Text{En: "Delete Session", Zh: "删除会话"}
 	MsgArchiveConfirm = Text{En: "Archive Session", Zh: "归档会话"}
-	MsgArchiveSuccess = Text{En: "Session archived", Zh: "会话已归档"}
+	ArchiveDlgWarning = Text{En: "The session leaves the list; its file is kept in the archive folder", Zh: "会话将移出列表，文件保留在归档目录中"}
+	ArchiveDlgConfirm = Text{En: "Archive", Zh: "归档"}
+	ArchiveDlgTarget  = Text{En: "Archive to", Zh: "归档到"}
+	ArchiveDlgFailed  = Text{En: "Archive failed", Zh: "归档失败"}
 	FilterAll         = Text{En: "All", Zh: "全部"}
 	FilterToday       = Text{En: "Today", Zh: "今天"}
 	FilterWeek        = Text{En: "Week", Zh: "本周"}
@@ -385,7 +392,7 @@ var (
 	HintSearch        = Text{En: "Search: ", Zh: "搜索: "}
 
 	// Data source (Claude Code / Codex)
-	MsgDeleteUnsupported = Text{En: "Deleting and archiving Codex data will come in a later version", Zh: "Codex 的删除和归档将在后续版本支持"}
+	MsgDeleteUnsupported = Text{En: "This agent's data cannot be deleted or archived here", Zh: "当前助手的数据不支持在这里删除或归档"}
 	MsgProjectDirMissing = Text{En: "Project folder not found: %s", Zh: "项目目录不存在：%s"}
 	MsgLaunchFailed      = Text{En: "Cannot start %s: %v", Zh: "无法启动 %s：%v"}
 	MsgSourceMissing     = Text{En: "%s data folder not found: %s", Zh: "未找到 %s 数据目录：%s"}
