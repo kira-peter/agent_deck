@@ -1,6 +1,6 @@
 package guide
 
-import "github.com/kira-peter/agentdeck/pkg/views"
+import "github.com/kira-peter/agent_deck/pkg/views"
 
 func init() {
 	views.Register(NewGuideView)

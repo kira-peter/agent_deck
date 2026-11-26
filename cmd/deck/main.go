@@ -9,19 +9,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gdamore/tcell/v2"
-	"github.com/kira-peter/agentdeck/pkg/core"
-	"github.com/kira-peter/agentdeck/pkg/i18n"
-	"github.com/kira-peter/agentdeck/pkg/ui/selector"
-	"github.com/kira-peter/agentdeck/pkg/ui/transition"
-	"github.com/kira-peter/agentdeck/pkg/views"
+	"github.com/kira-peter/agent_deck/pkg/core"
+	"github.com/kira-peter/agent_deck/pkg/i18n"
+	"github.com/kira-peter/agent_deck/pkg/ui/selector"
+	"github.com/kira-peter/agent_deck/pkg/ui/transition"
+	"github.com/kira-peter/agent_deck/pkg/views"
 
 	// Import views to trigger their init() registration
-	_ "github.com/kira-peter/agentdeck/pkg/views/guide"
-	_ "github.com/kira-peter/agentdeck/pkg/views/memory"
-	_ "github.com/kira-peter/agentdeck/pkg/views/overview"
-	_ "github.com/kira-peter/agentdeck/pkg/views/projects"
-	_ "github.com/kira-peter/agentdeck/pkg/views/sessions"
-	_ "github.com/kira-peter/agentdeck/pkg/views/settings"
+	_ "github.com/kira-peter/agent_deck/pkg/views/guide"
+	_ "github.com/kira-peter/agent_deck/pkg/views/memory"
+	_ "github.com/kira-peter/agent_deck/pkg/views/overview"
+	_ "github.com/kira-peter/agent_deck/pkg/views/projects"
+	_ "github.com/kira-peter/agent_deck/pkg/views/sessions"
+	_ "github.com/kira-peter/agent_deck/pkg/views/settings"
 )
 
 // tickMsg is sent on every tick to update animations

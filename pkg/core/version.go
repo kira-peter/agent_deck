@@ -7,7 +7,7 @@ import (
 
 // Build metadata. Override at link time, e.g.
 //
-//	go build -ldflags "-X github.com/kira-peter/agentdeck/pkg/core.BuildTime=2026-10-27T16:40"
+//	go build -ldflags "-X github.com/kira-peter/agent_deck/pkg/core.BuildTime=2026-10-27T16:40"
 var (
 	BuildTime = "" // set by build scripts / link flags
 )

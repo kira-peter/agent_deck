@@ -1,4 +1,4 @@
-module github.com/kira-peter/agentdeck
+module github.com/kira-peter/agent_deck
 
 go 1.25.5
 

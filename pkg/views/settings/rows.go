@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kira-peter/agentdeck/pkg/core"
-	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agent_deck/pkg/core"
+	"github.com/kira-peter/agent_deck/pkg/i18n"
 )
 
 type rowKind int

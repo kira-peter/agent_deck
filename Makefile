@@ -18,7 +18,7 @@ GOMOD=$(GOCMD) mod
 # which is the build time anyway. Pass one explicitly when needed:
 #   make build BUILD_TIME=2026-10-27T17:20
 BUILD_TIME ?=
-VERSION_PKG=github.com/kira-peter/agentdeck/pkg/core
+VERSION_PKG=github.com/kira-peter/agent_deck/pkg/core
 LDFLAGS=-ldflags "-s -w $(if $(BUILD_TIME),-X $(VERSION_PKG).BuildTime=$(BUILD_TIME),)"
 
 # OS-specific commands

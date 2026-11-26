@@ -7,8 +7,8 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/mattn/go-runewidth"
-	"github.com/kira-peter/agentdeck/pkg/core"
-	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agent_deck/pkg/core"
+	"github.com/kira-peter/agent_deck/pkg/i18n"
 )
 
 // cw measures display width the way terminals draw it: CJK is two cells, but

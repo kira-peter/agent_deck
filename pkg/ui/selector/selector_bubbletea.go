@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kira-peter/agentdeck/pkg/core"
-	"github.com/kira-peter/agentdeck/pkg/i18n"
-	"github.com/kira-peter/agentdeck/pkg/ui/animation"
-	"github.com/kira-peter/agentdeck/pkg/ui/textwidth"
-	"github.com/kira-peter/agentdeck/pkg/views"
+	"github.com/kira-peter/agent_deck/pkg/core"
+	"github.com/kira-peter/agent_deck/pkg/i18n"
+	"github.com/kira-peter/agent_deck/pkg/ui/animation"
+	"github.com/kira-peter/agent_deck/pkg/ui/textwidth"
+	"github.com/kira-peter/agent_deck/pkg/views"
 )
 
 // BubbleTeaSelector is the Bubble Tea version of selector

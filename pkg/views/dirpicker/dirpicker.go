@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/kira-peter/agentdeck/pkg/views"
+	"github.com/kira-peter/agent_deck/pkg/views"
 )
 
 // NewDirPickerView 创建新的目录选择器视图

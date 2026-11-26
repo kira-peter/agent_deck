@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/kira-peter/agentdeck/pkg/core"
-	"github.com/kira-peter/agentdeck/pkg/i18n"
+	"github.com/kira-peter/agent_deck/pkg/core"
+	"github.com/kira-peter/agent_deck/pkg/i18n"
 )
 
 // resumeNew is the choice returned for "start a new session".

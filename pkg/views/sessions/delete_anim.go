@@ -1,7 +1,7 @@
 package sessions
 
 import (
-	"github.com/kira-peter/agentdeck/pkg/ui/rowfx"
+	"github.com/kira-peter/agent_deck/pkg/ui/rowfx"
 )
 
 const listStartY = 7

@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/kira-peter/agentdeck/pkg/core"
-	"github.com/kira-peter/agentdeck/pkg/i18n"
-	"github.com/kira-peter/agentdeck/pkg/ui/textwidth"
-	"github.com/kira-peter/agentdeck/pkg/views"
+	"github.com/kira-peter/agent_deck/pkg/core"
+	"github.com/kira-peter/agent_deck/pkg/i18n"
+	"github.com/kira-peter/agent_deck/pkg/ui/textwidth"
+	"github.com/kira-peter/agent_deck/pkg/views"
 )
 
 // MemoryView lists every memory file Claude reads and shows its content.
