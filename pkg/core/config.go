@@ -10,8 +10,10 @@ import (
 // Config represents the application configuration
 type Config struct {
 	Version   string        `json:"version"`
-	Language  string        `json:"language"`   // "en" or "zh"
-	ClaudeDir string        `json:"claudeDir"`  // Path to .claude directory
+	Language  string        `json:"language"`  // "en" or "zh"
+	ClaudeDir string        `json:"claudeDir"` // Path to .claude directory
+	CodexDir  string        `json:"codexDir"`  // Path to .codex directory
+	Source    SourceKind    `json:"source"`    // agent whose data is shown
 	Display   DisplayConfig `json:"display"`
 	mu        sync.RWMutex
 }
@@ -53,6 +55,8 @@ func DefaultConfig() *Config {
 		Version:   "1.0",
 		Language:  "en", // Default to English
 		ClaudeDir: claudeDir,
+		CodexDir:  GetDefaultCodexDir(),
+		Source:    SourceClaude,
 		Display: DisplayConfig{
 			DateFormat:   "relative",
 			SizeUnit:     "auto",
@@ -68,6 +72,19 @@ func GetDefaultClaudeDir() string {
 		return ""
 	}
 	return filepath.Join(home, ".claude")
+}
+
+// GetDefaultCodexDir returns the default .codex directory path, honouring
+// CODEX_HOME like Codex itself does.
+func GetDefaultCodexDir() string {
+	if env := os.Getenv("CODEX_HOME"); env != "" {
+		return env
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".codex")
 }
 
 // GetConfigDir returns the configuration directory path (~/.claude-manager)
@@ -108,6 +125,12 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.ClaudeDir == "" {
 		cfg.ClaudeDir = GetDefaultClaudeDir()
+	}
+	if cfg.CodexDir == "" {
+		cfg.CodexDir = GetDefaultCodexDir()
+	}
+	if cfg.Source != SourceCodex {
+		cfg.Source = SourceClaude
 	}
 	if cfg.Display.DateFormat == "" {
 		cfg.Display.DateFormat = "relative"
@@ -200,6 +223,28 @@ func (c *Config) GetClaudeDir() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.ClaudeDir
+}
+
+// GetCodexDir returns the Codex directory path (thread-safe)
+func (c *Config) GetCodexDir() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.CodexDir
+}
+
+// GetSource returns the agent whose data is shown (thread-safe)
+func (c *Config) GetSource() SourceKind {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Source
+}
+
+// SetSource switches the agent whose data is shown and saves the config.
+func (c *Config) SetSource(kind SourceKind) error {
+	c.mu.Lock()
+	c.Source = kind
+	c.mu.Unlock()
+	return c.Save()
 }
 
 // DetectClaudeDirs returns a list of possible .claude directory locations

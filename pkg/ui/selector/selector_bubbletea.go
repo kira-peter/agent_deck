@@ -20,18 +20,59 @@ type BubbleTeaSelector struct {
 	height      int
 	spinner     *animation.Spinner
 	trans       *transition // page transition in progress, nil when idle
+	notice      string      // one-off message shown under the title
 }
+
+// codexOnlyHidden lists the views that have no Codex counterpart yet and are
+// left out of the menu in Codex mode.
+var codexOnlyHidden = map[string]bool{"memory": true, "guide": true}
 
 // NewBubbleTeaSelector creates a new Bubble Tea selector
 func NewBubbleTeaSelector() *BubbleTeaSelector {
-	registry := views.GetRegistry()
 	s := &BubbleTeaSelector{
-		viewList:    registry.GetAll(),
 		selectedIdx: 0,
 		spinner:     animation.NewSpinner(),
 	}
+	s.loadViews()
 	s.spinner.Start()
 	return s
+}
+
+// loadViews builds the menu for the current data source.
+func (s *BubbleTeaSelector) loadViews() {
+	all := views.GetRegistry().GetAll()
+	codex := core.GetConfig().GetSource() == core.SourceCodex
+	s.viewList = s.viewList[:0]
+	for _, v := range all {
+		if codex && codexOnlyHidden[v.ID] {
+			continue
+		}
+		s.viewList = append(s.viewList, v)
+	}
+	s.selectedIdx = min(s.selectedIdx, len(s.viewList)-1)
+}
+
+// toggleSource switches between Claude Code and Codex, keeping the cursor on
+// the same view when it exists in both menus.
+func (s *BubbleTeaSelector) toggleSource() {
+	cfg := core.GetConfig()
+	next := core.SourceCodex
+	if cfg.GetSource() == core.SourceCodex {
+		next = core.SourceClaude
+	}
+	dir := cfg.GetClaudeDir()
+	if next == core.SourceCodex {
+		dir = cfg.GetCodexDir()
+	}
+	if !core.SourceAvailable(next) {
+		s.notice = fmt.Sprintf(i18n.MsgSourceMissing.Get(), next.Label(), dir)
+		return
+	}
+	s.notice = ""
+	current := s.GetSelectedViewID()
+	_ = cfg.SetSource(next)
+	s.loadViews()
+	s.SelectByID(current)
 }
 
 // SelectByID moves the selection to the view with the given ID. Unknown IDs
@@ -78,6 +119,10 @@ func (s *BubbleTeaSelector) HandleKey(msg tea.KeyMsg) int {
 
 	case "enter":
 		return s.selectedIdx // Select
+
+	case "f1":
+		s.toggleSource()
+		return -3 // Refresh
 
 	case "t", "T":
 		// Toggle language
@@ -164,10 +209,17 @@ func (s *BubbleTeaSelector) compose() (lines []string, selRow int, ok bool) {
 
 func (s *BubbleTeaSelector) headerLines() []menuLine {
 	title := i18n.AppTitle.Get()
+	if core.GetConfig().GetSource() == core.SourceCodex {
+		title = i18n.AppTitleCodex.Get()
+	}
+	sub := s.centerStyledText(core.VersionLabel(), ansiGray)
+	if s.notice != "" {
+		sub = s.centerStyledText(s.notice, ansiWarn)
+	}
 	return []menuLine{
 		{text: ""},
 		{text: s.centerText(title), minWidth: calculateDisplayWidth(title) + 4},
-		{text: s.centerStyledText(core.VersionLabel(), ansiGray)},
+		{text: sub},
 		{text: s.horizontalLine()},
 	}
 }

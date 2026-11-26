@@ -6,6 +6,10 @@ var (
 	SetSecClaude  = Text{En: "Claude Code (settings.json)", Zh: "Claude Code 设置 (settings.json)"}
 	SetSecEnv     = Text{En: "Environment variables (env)", Zh: "环境变量 (env)"}
 	SetSecFiles   = Text{En: "Files & folders", Zh: "文件与目录"}
+	SetSecCodex   = Text{En: "Codex (config.toml)", Zh: "Codex 设置 (config.toml)"}
+
+	SetOpenCodexConfig = Text{En: "Open config.toml", Zh: "打开 config.toml"}
+	SetOpenCodexDir    = Text{En: "Open Codex folder", Zh: "打开 Codex 目录"}
 
 	SetDateFormat   = Text{En: "Date format", Zh: "日期格式"}
 	SetSizeUnit     = Text{En: "Size unit", Zh: "大小单位"}

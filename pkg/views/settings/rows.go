@@ -115,6 +115,21 @@ func (v *SettingsView) buildRows() []row {
 		},
 	)
 
+	// Codex keeps its settings in config.toml; for now the page only offers
+	// to open it.
+	if cfg.GetSource() == core.SourceCodex {
+		codexDir := cfg.GetCodexDir()
+		configPath := filepath.Join(codexDir, "config.toml")
+		rows = append(rows,
+			row{kind: kindHeader, label: i18n.SetSecCodex.Get()},
+			row{kind: kindOpen, label: i18n.SetOpenCodexConfig.Get(), value: configPath, path: configPath},
+			row{kind: kindHeader, label: i18n.SetSecFiles.Get()},
+			row{kind: kindOpen, label: i18n.SetOpenCodexDir.Get(), value: codexDir, path: codexDir},
+			row{kind: kindOpen, label: i18n.SetOpenManager.Get(), value: core.GetConfigPath(), path: core.GetConfigPath()},
+		)
+		return rows
+	}
+
 	// ── Claude Code settings.json ──────────────────────────────────────
 	rows = append(rows, row{kind: kindHeader, label: i18n.SetSecClaude.Get()})
 	if v.settings == nil {

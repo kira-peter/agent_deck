@@ -21,6 +21,10 @@ var (
 		En: "Claude Manager - Session & Memory Management",
 		Zh: "Claude Manager - 会话和记忆管理工具",
 	}
+	AppTitleCodex = Text{
+		En: "Claude Manager · Codex",
+		Zh: "Claude Manager · Codex",
+	}
 
 	// View names
 	ViewOverview = Text{
@@ -82,8 +86,8 @@ var (
 
 	// Navigation hints
 	HintNavigation = Text{
-		En: "↑↓/jk: Navigate  Enter: Select  T: Toggle Language  Q: Quit",
-		Zh: "↑↓/jk: 导航  Enter: 选择  T: 切换语言  Q: 退出",
+		En: "↑↓/jk: Navigate  Enter: Select  F1: Claude/Codex  T: Language  Q: Quit",
+		Zh: "↑↓/jk: 导航  Enter: 选择  F1: 切换 Claude/Codex  T: 切换语言  Q: 退出",
 	}
 	HintListActions = Text{
 		En: "Enter: Details  d: Delete  D: Delete now  A: Archive  /: Search  F: Filter  ESC: Back",
@@ -379,4 +383,10 @@ var (
 	FilterWeek        = Text{En: "Week", Zh: "本周"}
 	FilterMonth       = Text{En: "Month", Zh: "本月"}
 	HintSearch        = Text{En: "Search: ", Zh: "搜索: "}
+
+	// Data source (Claude Code / Codex)
+	MsgDeleteUnsupported = Text{En: "Deleting and archiving Codex data will come in a later version", Zh: "Codex 的删除和归档将在后续版本支持"}
+	MsgProjectDirMissing = Text{En: "Project folder not found: %s", Zh: "项目目录不存在：%s"}
+	MsgLaunchFailed      = Text{En: "Cannot start %s: %v", Zh: "无法启动 %s：%v"}
+	MsgSourceMissing     = Text{En: "%s data folder not found: %s", Zh: "未找到 %s 数据目录：%s"}
 )

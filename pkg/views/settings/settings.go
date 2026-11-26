@@ -63,8 +63,11 @@ func (v *SettingsView) Init(screen tcell.Screen) error {
 // reload re-reads settings.json and rebuilds the rows, keeping the cursor on
 // the same line number where possible.
 func (v *SettingsView) reload() {
-	path := filepath.Join(v.config.GetClaudeDir(), "settings.json")
-	v.settings, v.loadErr = core.LoadClaudeSettings(path)
+	v.settings, v.loadErr = nil, nil
+	if v.config.GetSource() != core.SourceCodex {
+		path := filepath.Join(v.config.GetClaudeDir(), "settings.json")
+		v.settings, v.loadErr = core.LoadClaudeSettings(path)
+	}
 	v.rows = v.buildRows()
 	if v.selected >= len(v.rows) || !v.rows[v.selected].selectable() {
 		v.selected = v.nearestSelectable(min(v.selected, len(v.rows)-1))

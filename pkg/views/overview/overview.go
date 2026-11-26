@@ -2,6 +2,7 @@ package overview
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/yourusername/claude-manager/pkg/core"
@@ -14,16 +15,15 @@ import (
 type OverviewView struct {
 	screen   tcell.Screen
 	overview core.Overview
-	claudeDir *core.ClaudeDir
+	src      core.Source
 	width    int
 	height   int
 }
 
 // NewOverviewView creates a new overview view
 func NewOverviewView() views.View {
-	config := core.GetConfig()
 	return &OverviewView{
-		claudeDir: core.NewClaudeDir(config.GetClaudeDir()),
+		src: core.CurrentSource(),
 	}
 }
 
@@ -32,8 +32,8 @@ func (v *OverviewView) Metadata() views.Metadata {
 		ID:     "overview",
 		NameEn: "Overview",
 		NameZh: "总览",
-		DescEn: "View Claude Code session, memory and project status",
-		DescZh: "查看 Claude Code 的会话、记忆和项目状态",
+		DescEn: "View session, memory and project status",
+		DescZh: "查看会话、记忆和项目状态",
 		Icon:   "🏠",
 	}
 }
@@ -43,7 +43,7 @@ func (v *OverviewView) Init(screen tcell.Screen) error {
 	v.width, v.height = screen.Size()
 
 	// Load overview data
-	overview, err := v.claudeDir.GetOverview()
+	overview, err := v.src.GetOverview()
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (v *OverviewView) Render() error {
 }
 
 func (v *OverviewView) renderTitle() {
-	title := i18n.ViewOverview.Get()
+	title := i18n.ViewOverview.Get() + " · " + v.src.Kind().Label()
 	y := 1
 	v.drawCenteredText(y, title, tcell.StyleDefault.
 		Foreground(tcell.ColorLightGreen).Bold(true))
@@ -86,15 +86,19 @@ func (v *OverviewView) renderStatistics() {
 	startY := 4
 	startX := 10
 
-	stats := []struct {
+	type stat struct {
 		label string
 		value string
-	}{
+	}
+	stats := []stat{
 		{i18n.LabelTotalProjects.Get(), fmt.Sprintf("%d", v.overview.ProjectCount)},
 		{i18n.LabelTotalSessions.Get(), fmt.Sprintf("%d", v.overview.SessionCount)},
-		{i18n.LabelTotalMemories.Get(), fmt.Sprintf("%d", v.overview.MemoryCount)},
-		{i18n.LabelTotalSize.Get(), core.FormatSize(v.overview.TotalSize)},
 	}
+	// memories are a Claude Code concept the Codex side does not read yet
+	if v.src.Kind() == core.SourceClaude {
+		stats = append(stats, stat{i18n.LabelTotalMemories.Get(), fmt.Sprintf("%d", v.overview.MemoryCount)})
+	}
+	stats = append(stats, stat{i18n.LabelTotalSize.Get(), core.FormatSize(v.overview.TotalSize)})
 
 	for i, stat := range stats {
 		y := startY + i
@@ -150,11 +154,8 @@ func (v *OverviewView) renderRecentSessions() {
 		}
 		y := startY + 1 + i
 
-		// Truncate first prompt if too long
-		prompt := session.FirstPrompt
-		if len(prompt) > 50 {
-			prompt = prompt[:47] + "..."
-		}
+		// Truncate first prompt by display width so CJK is not cut mid-rune
+		prompt := textwidth.Truncate(strings.Join(strings.Fields(session.FirstPrompt), " "), 50)
 
 		text := fmt.Sprintf("  %s - %s",
 			core.FormatRelativeTime(session.Modified),
@@ -183,7 +184,7 @@ func (v *OverviewView) HandleEvent(event tcell.Event) error {
 				return fmt.Errorf("quit")
 			case 'r', 'R':
 				// Refresh data
-				overview, err := v.claudeDir.GetOverview()
+				overview, err := v.src.GetOverview()
 				if err == nil {
 					v.overview = overview
 				}

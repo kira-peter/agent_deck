@@ -29,7 +29,7 @@ var cw = func() *runewidth.Condition {
 type ProjectsView struct {
 	screen       tcell.Screen
 	projects     []core.Project
-	claudeDir    *core.ClaudeDir
+	src          core.Source
 	width        int
 	height       int
 	selectedIdx  int
@@ -46,9 +46,8 @@ type ProjectsView struct {
 
 // NewProjectsView creates a new projects view
 func NewProjectsView() views.View {
-	config := core.GetConfig()
 	return &ProjectsView{
-		claudeDir:    core.NewClaudeDir(config.GetClaudeDir()),
+		src:          core.CurrentSource(),
 		selectedIdx:  -1, // 默认选中 "新项目" 选项
 		scrollOffset: 0,
 		gapAt:        -1,
@@ -71,7 +70,7 @@ func (v *ProjectsView) Init(screen tcell.Screen) error {
 	v.width, v.height = screen.Size()
 
 	// Load projects
-	projects, err := v.claudeDir.GetProjects()
+	projects, err := v.src.GetProjects()
 	if err != nil {
 		return err
 	}
@@ -105,7 +104,7 @@ func sortProjects(projects []core.Project) {
 
 // refreshUsage recomputes per-project usage and the all-projects total.
 func (v *ProjectsView) refreshUsage() {
-	v.claudeDir.FillUsage(v.projects)
+	v.src.FillUsage(v.projects)
 	v.totalUsage = core.Usage{}
 	for _, p := range v.projects {
 		v.totalUsage.Add(p.Usage)
@@ -311,8 +310,8 @@ func (v *ProjectsView) renderUsagePanel() {
 		{i18n.UsageOutput.Get(), core.FormatTokens(usage.OutputTokens)},
 		{i18n.UsageCacheRead.Get(), core.FormatTokens(usage.CacheReadTokens)},
 		{i18n.UsageCacheWrite.Get(), core.FormatTokens(usage.CacheWriteTokens)},
-		{i18n.UsageLinesAdded.Get(), fmt.Sprintf("%d", usage.LinesAdded)},
-		{i18n.UsageLinesRemoved.Get(), fmt.Sprintf("%d", usage.LinesRemoved)},
+		{i18n.UsageLinesAdded.Get(), v.lineStat(usage.LinesAdded)},
+		{i18n.UsageLinesRemoved.Get(), v.lineStat(usage.LinesRemoved)},
 		{i18n.UsageWorkTime.Get(), core.FormatHours(usage.Duration)},
 	}
 	for i, c := range columns {
@@ -323,6 +322,15 @@ func (v *ProjectsView) renderUsagePanel() {
 }
 
 const usageColWidth = 12
+
+// lineStat formats a lines-added/removed count, or "-" when the agent does
+// not record it (Codex).
+func (v *ProjectsView) lineStat(n int) string {
+	if !v.src.HasLineStats() {
+		return "-"
+	}
+	return fmt.Sprintf("%d", n)
+}
 
 // padLeft right-aligns s within width display cells (CJK-aware).
 func padLeft(s string, width int) string {
@@ -375,7 +383,7 @@ func (v *ProjectsView) HandleEvent(event tcell.Event) error {
 					v.quickDeleteProject(v.projects[v.selectedIdx])
 				}
 			case 'r', 'R': // Refresh
-				projects, err := v.claudeDir.GetProjects()
+				projects, err := v.src.GetProjects()
 				if err == nil {
 					sortProjects(projects)
 					v.projects = projects
@@ -407,65 +415,51 @@ func (v *ProjectsView) moveNext() {
 	}
 }
 
-// openProject opens the project in Claude Code. With existing sessions the
-// user first picks between a new session and resuming one of them.
+// openProject opens the project in the current agent. With existing sessions
+// the user first picks between a new session and resuming one of them.
 func (v *ProjectsView) openProject(project core.Project) error {
 	sessions := v.loadProjectSessions(project)
 	if len(sessions) == 0 {
-		return v.openProjectInClaude(project.Path, "")
+		return v.launchAgent(project.Path, "")
 	}
 
 	switch choice := v.chooseSession(project, sessions); choice {
 	case resumeCancel:
 		return nil
 	case resumeNew:
-		return v.openProjectInClaude(project.Path, "")
+		return v.launchAgent(project.Path, "")
 	default:
-		return v.openProjectInClaude(project.Path, sessions[choice].ID)
+		return v.launchAgent(project.Path, sessions[choice].ID)
 	}
 }
 
-// openProjectInClaude starts claude in projectPath in a new window. A
-// non-empty sessionID resumes that session instead of starting a new one.
-func (v *ProjectsView) openProjectInClaude(projectPath, sessionID string) error {
+// launchAgent starts the current agent (claude or codex) in projectPath in a
+// new window. A non-empty sessionID resumes that session instead of starting
+// a new one.
+func (v *ProjectsView) launchAgent(projectPath, sessionID string) error {
 	// Check if the directory exists
 	if _, err := os.Stat(projectPath); os.IsNotExist(err) {
-		// Show error message on screen
-		v.screen.Clear()
-		v.drawCenteredText(v.height/2, fmt.Sprintf("项目目录不存在: %s", projectPath),
-			tcell.StyleDefault.Foreground(tcell.ColorRed))
-		v.drawCenteredText(v.height/2+2, "按任意键继续...",
-			tcell.StyleDefault.Foreground(tcell.ColorGray))
-		v.screen.Show()
-		v.screen.PollEvent() // Wait for any key
+		v.showResultBox(fmt.Sprintf(i18n.MsgProjectDirMissing.Get(), projectPath), tcell.ColorRed, 0)
 		return nil
 	}
 
-	// On Windows, use PowerShell to start a new terminal with Claude
-	// Use 'start' to open a new window
-	// The old call passed the project path as an argument to claude, which is
-	// redundant with -WorkingDirectory; only the resume flag is needed.
-	// --name sets the terminal tab title to the project folder instead of the
-	// first message of the session.
-	argList := []string{"'--name'", "'" + psQuote(filepath.Base(projectPath)) + "'"}
-	if sessionID != "" {
-		argList = append(argList, "'--resume'", "'"+psQuote(sessionID)+"'")
+	// The tab title is the project folder (Claude only; Codex ignores it).
+	exe, args := v.src.LaunchArgs(projectPath, sessionID, filepath.Base(projectPath))
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = "'" + psQuote(a) + "'"
 	}
-	args := " -ArgumentList " + strings.Join(argList, ",")
+	argList := ""
+	if len(quoted) > 0 {
+		argList = " -ArgumentList " + strings.Join(quoted, ",")
+	}
+	// Start-Process opens a new terminal window running the agent
 	cmd := exec.Command("powershell", "-Command",
-		fmt.Sprintf("Start-Process -FilePath 'claude'%s -WorkingDirectory '%s'",
-			args, psQuote(projectPath)))
+		fmt.Sprintf("Start-Process -FilePath '%s'%s -WorkingDirectory '%s'",
+			psQuote(exe), argList, psQuote(projectPath)))
 
-	// Try to start the command
 	if err := cmd.Run(); err != nil {
-		// Show error message on screen
-		v.screen.Clear()
-		v.drawCenteredText(v.height/2, fmt.Sprintf("无法启动 Claude: %v", err),
-			tcell.StyleDefault.Foreground(tcell.ColorRed))
-		v.drawCenteredText(v.height/2+2, "按任意键继续...",
-			tcell.StyleDefault.Foreground(tcell.ColorGray))
-		v.screen.Show()
-		v.screen.PollEvent() // Wait for any key
+		v.showResultBox(fmt.Sprintf(i18n.MsgLaunchFailed.Get(), v.src.Kind().Label(), err), tcell.ColorRed, 0)
 		return nil
 	}
 
@@ -476,6 +470,10 @@ func (v *ProjectsView) openProjectInClaude(projectPath, sessionID string) error 
 // deleteProject deletes a project after the user confirms in a popup. The
 // delete animation is the feedback, so success shows no message box.
 func (v *ProjectsView) deleteProject(project core.Project) {
+	if !v.src.CanDelete() {
+		v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
+		return
+	}
 	if v.confirmDeleteProject(project) {
 		v.removeProject(project)
 	}
@@ -484,14 +482,18 @@ func (v *ProjectsView) deleteProject(project core.Project) {
 // quickDeleteProject deletes a project immediately, without any confirmation
 // or success message. Failures are still reported.
 func (v *ProjectsView) quickDeleteProject(project core.Project) {
+	if !v.src.CanDelete() {
+		v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
+		return
+	}
 	v.removeProject(project)
 }
 
-// removeProject deletes the project's directory and then animates its row
-// away: the shot erases it, the list is reloaded and the rows below slide up.
+// removeProject deletes the project's data and then animates its row away:
+// the shot erases it, the list is reloaded and the rows below slide up.
 // Failures are reported in a popup.
 func (v *ProjectsView) removeProject(project core.Project) {
-	if err := v.removeProjectDir(project); err != nil {
+	if err := v.src.DeleteProject(project); err != nil {
 		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
 		v.reloadProjects()
 		return
@@ -512,7 +514,7 @@ func (v *ProjectsView) removeProject(project core.Project) {
 
 // reloadProjects re-reads the project list and keeps the selection in range.
 func (v *ProjectsView) reloadProjects() {
-	projects, err := v.claudeDir.GetProjects()
+	projects, err := v.src.GetProjects()
 	if err != nil {
 		return
 	}
@@ -523,12 +525,6 @@ func (v *ProjectsView) reloadProjects() {
 	if v.selectedIdx >= len(v.projects) {
 		v.selectedIdx = len(v.projects) - 1 // -1 selects the "new project" row
 	}
-}
-
-// removeProjectDir deletes the project's directory from .claude/projects/.
-func (v *ProjectsView) removeProjectDir(project core.Project) error {
-	claudeDir := core.GetConfig().GetClaudeDir()
-	return os.RemoveAll(fmt.Sprintf("%s/projects/%s", claudeDir, project.EncodedName))
 }
 
 // openNewProject 启动目录选择器以打开新项目
@@ -557,7 +553,7 @@ func (v *ProjectsView) openNewProject() error {
 			if err.Error() == "confirmed" {
 				// 用户确认了选择
 				selectedPath := picker.GetSelectedPath()
-				return v.openProjectInClaude(selectedPath, "")
+				return v.launchAgent(selectedPath, "")
 			}
 			// 取消或返回 - 返回项目列表
 			return nil

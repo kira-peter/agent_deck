@@ -18,7 +18,7 @@ const resumeCancel = -2
 
 // loadProjectSessions returns the project's sessions, newest first.
 func (v *ProjectsView) loadProjectSessions(project core.Project) []core.Session {
-	sessions, err := v.claudeDir.GetProjectSessions(project.EncodedName)
+	sessions, err := v.src.GetProjectSessions(project)
 	if err != nil {
 		return nil
 	}

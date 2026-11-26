@@ -294,7 +294,7 @@ func (cd *ClaudeDir) GetSessions() ([]Session, error) {
 
 	var allSessions []Session
 	for _, project := range projects {
-		sessions, err := cd.GetProjectSessions(project.EncodedName)
+		sessions, err := cd.GetEncodedProjectSessions(project.EncodedName)
 		if err != nil {
 			continue
 		}
@@ -304,9 +304,10 @@ func (cd *ClaudeDir) GetSessions() ([]Session, error) {
 	return allSessions, nil
 }
 
-// GetProjectSessions returns all sessions for a specific project.
+// GetEncodedProjectSessions returns all sessions for the project stored in
+// projects/<encodedName>.
 // It first tries sessions-index.json; if absent, falls back to scanning .jsonl files directly.
-func (cd *ClaudeDir) GetProjectSessions(encodedName string) ([]Session, error) {
+func (cd *ClaudeDir) GetEncodedProjectSessions(encodedName string) ([]Session, error) {
 	projectPath := filepath.Join(cd.Path, "projects", encodedName)
 	indexPath := filepath.Join(projectPath, "sessions-index.json")
 
@@ -707,9 +708,9 @@ func (cd *ClaudeDir) GetSessionContent(filePath string, maxLines int) (string, e
 	return readFirstLines(filePath, maxLines)
 }
 
-// GetSessionMessages parses a session .jsonl file and returns user/assistant messages.
+// GetSessionMessagesFromFile parses a session .jsonl file and returns user/assistant messages.
 // It handles both plain-string content (user) and array content blocks (assistant).
-func (cd *ClaudeDir) GetSessionMessages(filePath string, maxMessages int) ([]SessionMessage, error) {
+func (cd *ClaudeDir) GetSessionMessagesFromFile(filePath string, maxMessages int) ([]SessionMessage, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err

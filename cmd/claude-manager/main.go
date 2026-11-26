@@ -144,11 +144,20 @@ func main() {
 	// Initialize configuration
 	config := core.GetConfig()
 
-	// Check if Claude directory exists
-	if !core.ExistsAndValid(config.GetClaudeDir()) {
-		fmt.Printf("Error: Claude directory not found at %s\n", config.GetClaudeDir())
-		fmt.Println("Please ensure Claude Code is installed and has been run at least once.")
+	// Start when either agent's data folder exists; if the saved choice is
+	// missing, fall back to the other one.
+	claudeOK := core.SourceAvailable(core.SourceClaude)
+	codexOK := core.SourceAvailable(core.SourceCodex)
+	if !claudeOK && !codexOK {
+		fmt.Printf("Error: neither Claude Code (%s) nor Codex (%s) data was found.\n",
+			config.GetClaudeDir(), config.GetCodexDir())
+		fmt.Println("Please run Claude Code or Codex at least once.")
 		os.Exit(1)
+	}
+	if config.GetSource() == core.SourceCodex && !codexOK {
+		_ = config.SetSource(core.SourceClaude)
+	} else if config.GetSource() == core.SourceClaude && !claudeOK {
+		_ = config.SetSource(core.SourceCodex)
 	}
 
 	// Initialize i18n with config language

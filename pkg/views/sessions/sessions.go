@@ -19,7 +19,7 @@ import (
 type SessionsView struct {
 	screen       tcell.Screen
 	sessions     []core.Session
-	claudeDir    *core.ClaudeDir
+	src          core.Source
 	width        int
 	height       int
 	selectedIdx  int
@@ -47,9 +47,8 @@ type SessionsView struct {
 
 // NewSessionsView creates a new sessions view
 func NewSessionsView() views.View {
-	config := core.GetConfig()
 	return &SessionsView{
-		claudeDir:    core.NewClaudeDir(config.GetClaudeDir()),
+		src:          core.CurrentSource(),
 		selectedIdx:  0,
 		scrollOffset: 0,
 		gapAt:        -1,
@@ -71,7 +70,7 @@ func (v *SessionsView) Init(screen tcell.Screen) error {
 	v.screen = screen
 	v.width, v.height = screen.Size()
 
-	sessions, err := v.claudeDir.GetSessions()
+	sessions, err := v.src.GetSessions()
 	if err != nil {
 		return err
 	}
@@ -297,7 +296,7 @@ func (v *SessionsView) loadSessionDetail(session core.Session) {
 	v.detailLines = append(v.detailLines, "")
 
 	// Load messages
-	messages, err := v.claudeDir.GetSessionMessages(session.FilePath, 0)
+	messages, err := v.src.GetSessionMessages(session, 0)
 	if err != nil {
 		v.detailLines = append(v.detailLines, fmt.Sprintf("Error loading messages: %v", err))
 		return
@@ -437,7 +436,7 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 		case 'j':
 			v.moveNext()
 		case 'r', 'R':
-			sessions, err := v.claudeDir.GetSessions()
+			sessions, err := v.src.GetSessions()
 			if err == nil {
 				sort.Slice(sessions, func(i, j int) bool {
 					return sessions[i].Modified.After(sessions[j].Modified)
@@ -454,7 +453,10 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 				v.quickDeleteSession(v.displayedSessions[v.selectedIdx])
 			}
 		case 'a', 'A':
-			if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
+			if !v.src.CanDelete() {
+				// archiving moves files, which would break Codex's own indexes
+				v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
+			} else if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
 				v.archiveSession(v.displayedSessions[v.selectedIdx])
 			}
 		case '/':
@@ -584,6 +586,10 @@ func (v *SessionsView) rebuildDisplay() {
 // deleteSession deletes a session after the user confirms in a dialog. The
 // delete animation is the feedback, so success shows no message box.
 func (v *SessionsView) deleteSession(session core.Session) {
+	if !v.src.CanDelete() {
+		v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
+		return
+	}
 	if !v.confirmDeleteSession(session) {
 		return
 	}
@@ -595,6 +601,10 @@ func (v *SessionsView) deleteSession(session core.Session) {
 // quickDeleteSession deletes a session immediately, without confirmation or a
 // success message. Failures are still reported.
 func (v *SessionsView) quickDeleteSession(session core.Session) {
+	if !v.src.CanDelete() {
+		v.showResultBox(i18n.MsgDeleteUnsupported.Get(), tcell.ColorYellow, 0)
+		return
+	}
 	if err := v.removeSession(session); err != nil {
 		v.showResultBox(fmt.Sprintf("%s: %v", i18n.DeleteDlgFailed.Get(), err), tcell.ColorRed, 0)
 	}
@@ -604,7 +614,7 @@ func (v *SessionsView) quickDeleteSession(session core.Session) {
 // shot erases it, the session is dropped from the list and the rows below
 // slide up. The selection stays in range.
 func (v *SessionsView) removeSession(session core.Session) error {
-	if err := core.DeleteSessionFiles(session); err != nil {
+	if err := v.src.DeleteSession(session); err != nil {
 		return err
 	}
 
