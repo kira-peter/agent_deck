@@ -31,7 +31,7 @@
 - **项目** — 按最后活动时间列出项目，显示每个项目的 token 用量；打开时可以新建会话或续接已有会话
 - **开启新项目** — 内置 Miller Columns 风格目录选择器，选好目录后在新终端窗口启动助手
 - **会话** — 浏览所有会话，支持关键字搜索、按时间过滤、查看对话详情、删除或归档
-- **记忆**（仅 Claude Code）— 汇总全局和各项目的 `CLAUDE.md` 与 `MEMORY.md`
+- **记忆** — Claude Code 汇总全局和各项目的 `CLAUDE.md` 与 `MEMORY.md`；Codex 汇总 `~/.codex` 和各项目根目录的 `AGENTS.md`
 - **指南**（仅 Claude Code）— 内置 Claude 记忆系统说明
 - **设置** — AgentDeck 自身的显示选项；Claude Code 的 `settings.json` 常用项可直接修改（多选项用轮盘选择）；Codex 提供打开 `config.toml` 的入口
 - **动画** — 菜单 spinner、进出页面的横线转场、删除时的射线清除
@@ -174,6 +174,7 @@ Codex 模式下的删除和归档通过 `codex delete` / `codex archive` 完成�
 - **用量**：取会话中最后一次 `token_count` 的累计值；Codex 不记录代码增删行数，显示为 `-`
 - **删除与归档**：不直接改文件，调用 `codex delete` / `codex archive`。Codex 在 sqlite 中记录了会话文件的绝对路径，直接删文件会让索引失效。归档后的文件在 `archived_sessions/`
 - **删除项目**：逐个删除该工作目录下的全部 Codex 会话
+- **记忆**：列出 `~/.codex` 与各项目根目录下存在的 `AGENTS.md` / `AGENTS.override.md`；Codex 内部的 `memories_1.sqlite` 不读取
 
 ## 项目结构
 
@@ -228,7 +229,7 @@ agentdeck/
 ## 已知限制
 
 - "打开项目"通过 PowerShell `Start-Process` 启动新窗口，目前仅适用于 Windows
-- Codex 模式暂不支持记忆页和设置项编辑
+- Codex 模式暂不支持设置项编辑（只提供打开 `config.toml`），指南页只讲 Claude Code，Codex 模式下隐藏
 - Codex 没有设置终端标题的参数，打开后的标签名由 Codex 决定
 - 在 VS Code 内置终端中，`F1` 可能被 VS Code 拦截为命令面板
 - 目录选择器最多同时显示 5 列，更深的路径靠横向滚动

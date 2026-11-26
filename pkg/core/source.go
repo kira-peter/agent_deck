@@ -38,6 +38,8 @@ type Source interface {
 	GetSessions() ([]Session, error)
 	GetSessionMessages(s Session, maxMessages int) ([]SessionMessage, error)
 	GetOverview() (Overview, error)
+	// GetMemories lists the instruction / memory files the agent reads.
+	GetMemories() ([]Memory, error)
 	// FillUsage sets Usage on every project.
 	FillUsage(projects []Project)
 

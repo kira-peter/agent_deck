@@ -94,10 +94,7 @@ func (v *OverviewView) renderStatistics() {
 		{i18n.LabelTotalProjects.Get(), fmt.Sprintf("%d", v.overview.ProjectCount)},
 		{i18n.LabelTotalSessions.Get(), fmt.Sprintf("%d", v.overview.SessionCount)},
 	}
-	// memories are a Claude Code concept the Codex side does not read yet
-	if v.src.Kind() == core.SourceClaude {
-		stats = append(stats, stat{i18n.LabelTotalMemories.Get(), fmt.Sprintf("%d", v.overview.MemoryCount)})
-	}
+	stats = append(stats, stat{i18n.LabelTotalMemories.Get(), fmt.Sprintf("%d", v.overview.MemoryCount)})
 	stats = append(stats, stat{i18n.LabelTotalSize.Get(), core.FormatSize(v.overview.TotalSize)})
 
 	for i, stat := range stats {
@@ -147,9 +144,9 @@ func (v *OverviewView) renderRecentSessions() {
 	v.drawText(startX, startY, header, tcell.StyleDefault.
 		Foreground(tcell.ColorLightCyan).Bold(true))
 
-	// List recent sessions
+	// List recent sessions, stopping above the footer line
 	for i, session := range v.overview.RecentSessions {
-		if i >= 5 {
+		if i >= 5 || startY+1+i >= v.height-3 {
 			break // Show max 5
 		}
 		y := startY + 1 + i

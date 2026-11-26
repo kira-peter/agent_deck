@@ -1,4 +1,4 @@
-.PHONY: build run clean install test
+.PHONY: build run clean install install-bin test
 
 # Build variables
 BINARY_NAME=deck
@@ -54,6 +54,14 @@ clean:
 	@$(RM_BUILD)
 	@echo "Clean complete"
 
+# Install the deck command into Go's bin folder (%USERPROFILE%\go\bin on
+# Windows, ~/go/bin elsewhere, or $GOBIN when set). Put that folder on PATH
+# once and `deck` works from any directory.
+install-bin:
+	@echo Installing $(BINARY_NAME)...
+	go install $(LDFLAGS) $(MAIN_PATH)
+	@echo Installed into the folder printed by: go env GOPATH  (bin subfolder)
+
 install:
 	@echo "Installing dependencies..."
 	@$(GOMOD) download
@@ -89,6 +97,7 @@ help:
 	@echo "  make run          - Build and run the application"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make install      - Install dependencies"
+	@echo "  make install-bin  - Install the deck command into Go's bin folder"
 	@echo "  make test         - Run tests"
 	@echo "  make build-windows- Build for Windows"
 	@echo "  make build-linux  - Build for Linux"

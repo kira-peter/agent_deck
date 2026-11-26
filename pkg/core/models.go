@@ -31,8 +31,8 @@ type Session struct {
 type MemoryKind string
 
 const (
-	MemoryUser    MemoryKind = "user"    // ~/.claude/CLAUDE.md
-	MemoryProject MemoryKind = "project" // <project>/CLAUDE.md
+	MemoryUser    MemoryKind = "user"    // ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md
+	MemoryProject MemoryKind = "project" // <project>/CLAUDE.md, <project>/AGENTS.md
 	MemoryAuto    MemoryKind = "auto"    // projects/<p>/memory/MEMORY.md (index)
 	MemoryTopic   MemoryKind = "topic"   // projects/<p>/memory/<topic>.md
 )

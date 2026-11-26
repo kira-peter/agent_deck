@@ -445,8 +445,19 @@ func (v *ProjectsView) launchAgent(projectPath, sessionID string) error {
 
 	// The tab title is the project folder (Claude only; Codex ignores it).
 	exe, args := v.src.LaunchArgs(projectPath, sessionID, filepath.Base(projectPath))
+	file, args, raw, err := resolveLauncher(exe, args)
+	if err != nil {
+		v.showResultBox(fmt.Sprintf(i18n.MsgLaunchFailed.Get(), v.src.Kind().Label(), err), tcell.ColorRed, 0)
+		return nil
+	}
 	quoted := make([]string, len(args))
 	for i, a := range args {
+		// Start-Process joins -ArgumentList with spaces as-is, so an
+		// argument with a space must carry its own double quotes, unless
+		// it is an already-built command line
+		if !raw {
+			a = winQuote(a)
+		}
 		quoted[i] = "'" + psQuote(a) + "'"
 	}
 	argList := ""
@@ -454,9 +465,9 @@ func (v *ProjectsView) launchAgent(projectPath, sessionID string) error {
 		argList = " -ArgumentList " + strings.Join(quoted, ",")
 	}
 	// Start-Process opens a new terminal window running the agent
-	cmd := exec.Command("powershell", "-Command",
+	cmd := exec.Command("powershell", "-NoProfile", "-Command",
 		fmt.Sprintf("Start-Process -FilePath '%s'%s -WorkingDirectory '%s'",
-			psQuote(exe), argList, psQuote(projectPath)))
+			psQuote(file), argList, psQuote(projectPath)))
 
 	if err := cmd.Run(); err != nil {
 		v.showResultBox(fmt.Sprintf(i18n.MsgLaunchFailed.Get(), v.src.Kind().Label(), err), tcell.ColorRed, 0)
@@ -465,6 +476,41 @@ func (v *ProjectsView) launchAgent(projectPath, sessionID string) error {
 
 	// Success - exit the manager
 	return fmt.Errorf("quit")
+}
+
+// resolveLauncher turns a command name into something Start-Process can run
+// in a new console window. Given a bare name, Start-Process may pick an npm
+// shim such as codex.ps1, whose default action is to open it in Notepad. So
+// the name is resolved the way cmd.exe would (PATHEXT: .exe, .cmd, ...; never
+// .ps1), and batch shims (.cmd/.bat) are run through cmd.exe. raw reports
+// that args are already a finished command line and must not be quoted again.
+func resolveLauncher(exe string, args []string) (file string, out []string, raw bool, err error) {
+	path, err := exec.LookPath(exe)
+	if err != nil {
+		return "", nil, false, err
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".cmd", ".bat":
+		// cmd /s /c "<command line>": with /s cmd strips just the outer pair
+		// of quotes and runs the rest as written, so quoted paths survive.
+		// The console stays open while the agent runs.
+		line := winQuote(path)
+		for _, a := range args {
+			line += " " + winQuote(a)
+		}
+		return "cmd.exe", []string{"/s", "/c", "\"" + line + "\""}, true, nil
+	}
+	return path, args, false, nil
+}
+
+// winQuote wraps a in double quotes when it contains spaces or quotes, the
+// way Windows command lines expect. Quoting is added by the caller only where
+// needed, so plain arguments stay unchanged.
+func winQuote(a string) string {
+	if a != "" && !strings.ContainsAny(a, " \t\"") {
+		return a
+	}
+	return "\"" + strings.ReplaceAll(a, "\"", "\\\"") + "\""
 }
 
 // deleteProject deletes a project after the user confirms in a popup. The

@@ -23,9 +23,10 @@ type BubbleTeaSelector struct {
 	notice      string      // one-off message shown under the title
 }
 
-// codexOnlyHidden lists the views that have no Codex counterpart yet and are
-// left out of the menu in Codex mode.
-var codexOnlyHidden = map[string]bool{"memory": true, "guide": true}
+// codexOnlyHidden lists the views that have no Codex counterpart and are
+// left out of the menu in Codex mode. The guide explains Claude Code's
+// memory system only.
+var codexOnlyHidden = map[string]bool{"guide": true}
 
 // NewBubbleTeaSelector creates a new Bubble Tea selector
 func NewBubbleTeaSelector() *BubbleTeaSelector {

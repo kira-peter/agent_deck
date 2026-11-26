@@ -13,11 +13,12 @@ import (
 	"github.com/kira-peter/agent_deck/pkg/views"
 )
 
-// MemoryView lists every memory file Claude reads and shows its content.
+// MemoryView lists every memory / instruction file the current agent reads
+// and shows its content.
 type MemoryView struct {
 	screen       tcell.Screen
 	memories     []core.Memory
-	claudeDir    *core.ClaudeDir
+	src          core.Source
 	width        int
 	height       int
 	selectedIdx  int
@@ -33,10 +34,7 @@ type MemoryView struct {
 }
 
 func NewMemoryView() views.View {
-	config := core.GetConfig()
-	return &MemoryView{
-		claudeDir: core.NewClaudeDir(config.GetClaudeDir()),
-	}
+	return &MemoryView{src: core.CurrentSource()}
 }
 
 func (v *MemoryView) Metadata() views.Metadata {
@@ -59,7 +57,7 @@ func (v *MemoryView) Init(screen tcell.Screen) error {
 // reload re-reads the memory files. Order: user file first, then by project,
 // index before topics, so related files stay together.
 func (v *MemoryView) reload() error {
-	memories, err := v.claudeDir.GetMemories()
+	memories, err := v.src.GetMemories()
 	if err != nil {
 		return err
 	}
@@ -152,16 +150,20 @@ func (v *MemoryView) Render() error {
 const rowsPerEntry = 2
 
 func (v *MemoryView) renderList() {
-	title := fmt.Sprintf("%s (%d)", i18n.ViewMemory.Get(), len(v.memories))
+	title := fmt.Sprintf("%s · %s (%d)", i18n.ViewMemory.Get(), v.src.Kind().Label(), len(v.memories))
 	v.drawCenteredText(1, title, tcell.StyleDefault.
 		Foreground(tcell.ColorLightGreen).Bold(true))
 	v.drawHorizontalLine(3)
 
 	const startY, startX = 5, 4
 	if len(v.memories) == 0 {
+		help := i18n.MemEmptyHelp.Get()
+		if v.src.Kind() == core.SourceCodex {
+			help = i18n.MemEmptyHelpCodex.Get()
+		}
 		v.drawCenteredText(startY+2, i18n.StatusNoData.Get(),
 			tcell.StyleDefault.Foreground(tcell.ColorGray))
-		v.drawCenteredText(startY+4, textwidth.Truncate(i18n.MemEmptyHelp.Get(), v.width-8),
+		v.drawCenteredText(startY+4, textwidth.Truncate(help, v.width-8),
 			tcell.StyleDefault.Foreground(tcell.ColorGray))
 		return
 	}

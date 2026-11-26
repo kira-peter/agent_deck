@@ -57,7 +57,10 @@ func (cx *CodexDir) CanDelete() bool { return true }
 
 // DeleteSession permanently deletes s with `codex delete`.
 func (cx *CodexDir) DeleteSession(s Session) error {
-	if err := runCodex(cx.Path, "delete", s.ID); err != nil {
+	// Without a terminal codex cannot ask for confirmation and refuses;
+	// --force skips the prompt (the user already confirmed in our popup, or
+	// chose D to delete without one). It requires a UUID, which s.ID is.
+	if err := runCodex(cx.Path, "delete", "--force", s.ID); err != nil {
 		return err
 	}
 	// trust the files, not just the exit code
@@ -380,6 +383,42 @@ func isCodexInjected(text string) bool {
 	return false
 }
 
+// codexInstructionFiles are the instruction files Codex looks for, in a
+// folder. Only the ones that exist are listed; the manager does not try to
+// model which one wins.
+var codexInstructionFiles = []string{"AGENTS.override.md", "AGENTS.md"}
+
+// GetMemories lists the AGENTS.md files Codex reads: the global one in the
+// Codex home and one per project root. Codex's own memories_1.sqlite is an
+// internal database and is not read.
+func (cx *CodexDir) GetMemories() ([]Memory, error) {
+	var out []Memory
+	for _, name := range codexInstructionFiles {
+		if m, ok := newMemory(MemoryUser, "", filepath.Join(cx.Path, name)); ok {
+			out = append(out, m)
+		}
+	}
+	projects, err := cx.GetProjects()
+	if err != nil {
+		return out, err
+	}
+	seen := map[string]bool{}
+	for _, p := range projects {
+		dir := filepath.Clean(p.Path)
+		// a session started in the Codex home is not a project
+		if dir == "" || seen[projectKey(dir)] || projectKey(dir) == projectKey(cx.Path) {
+			continue
+		}
+		seen[projectKey(dir)] = true
+		for _, name := range codexInstructionFiles {
+			if m, ok := newMemory(MemoryProject, p.Path, filepath.Join(dir, name)); ok {
+				out = append(out, m)
+			}
+		}
+	}
+	return out, nil
+}
+
 // GetSessions returns all sessions, most recent first.
 func (cx *CodexDir) GetSessions() ([]Session, error) {
 	sessions, err := cx.load()
@@ -467,6 +506,9 @@ func (cx *CodexDir) GetOverview() (Overview, error) {
 	sessions, _ := cx.load()
 	o.SessionCount = len(sessions)
 	o.RecentSessions = sessions[:min(5, len(sessions))]
+	if memories, err := cx.GetMemories(); err == nil {
+		o.MemoryCount = len(memories)
+	}
 	return o, nil
 }
 

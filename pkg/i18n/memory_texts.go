@@ -12,6 +12,10 @@ var (
 		En: "No memory files found. Claude writes them to ~/.claude/projects/<project>/memory, or you can create CLAUDE.md.",
 		Zh: "没有找到记忆文件。Claude 会把记忆写到 ~/.claude/projects/<项目>/memory，你也可以自己创建 CLAUDE.md。",
 	}
+	MemEmptyHelpCodex = Text{
+		En: "No AGENTS.md found. Put one in ~/.codex for all projects, or in a project's root folder.",
+		Zh: "没有找到 AGENTS.md。放在 ~/.codex 下对全部项目生效，放在项目根目录下只对该项目生效。",
+	}
 	MemEntries   = Text{En: "%d entries", Zh: "%d 条"}
 	MemEmptyFile = Text{En: "(empty file)", Zh: "(空文件)"}
 	MemReadFail  = Text{En: "Cannot read file: %v", Zh: "无法读取文件：%v"}

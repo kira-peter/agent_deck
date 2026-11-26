@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(\\(Get-Item \"-p\"\\).CreationTime)",
+      "Bash(make build *)",
+      "PowerShell(make build *)",
+      "Bash(go doc *)",
+      "Bash(./build/claude-manager)",
+      "Bash(pkill -f claude-manager)",
+      "PowerShell(claude *)",
+      "PowerShell($projectsDir = \"$env:USERPROFILE\\\\.claude\\\\projects\"; if \\(Test-Path $projectsDir\\) { Get-ChildItem $projectsDir -Directory | Select-Object -First 5 -ExpandProperty FullName } else { \"NOT FOUND: $projectsDir\" })",
+      "PowerShell(Get-Content *)"
+    ]
+  }
+}
