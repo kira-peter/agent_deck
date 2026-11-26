@@ -18,8 +18,8 @@ func (t Text) Get() string {
 var (
 	// Main title
 	AppTitle = Text{
-		En: "AgentDeck - Coding Agent Session Manager",
-		Zh: "AgentDeck - 编程助手会话管理工具",
+		En: "AgentDeck · Claude Code",
+		Zh: "AgentDeck · Claude Code",
 	}
 	AppTitleCodex = Text{
 		En: "AgentDeck · Codex",

@@ -23,11 +23,6 @@ type BubbleTeaSelector struct {
 	notice      string      // one-off message shown under the title
 }
 
-// codexOnlyHidden lists the views that have no Codex counterpart and are
-// left out of the menu in Codex mode. The guide explains Claude Code's
-// memory system only.
-var codexOnlyHidden = map[string]bool{"guide": true}
-
 // NewBubbleTeaSelector creates a new Bubble Tea selector
 func NewBubbleTeaSelector() *BubbleTeaSelector {
 	s := &BubbleTeaSelector{
@@ -39,17 +34,9 @@ func NewBubbleTeaSelector() *BubbleTeaSelector {
 	return s
 }
 
-// loadViews builds the menu for the current data source.
+// loadViews refreshes the menu metadata for the current data source.
 func (s *BubbleTeaSelector) loadViews() {
-	all := views.GetRegistry().GetAll()
-	codex := core.GetConfig().GetSource() == core.SourceCodex
-	s.viewList = s.viewList[:0]
-	for _, v := range all {
-		if codex && codexOnlyHidden[v.ID] {
-			continue
-		}
-		s.viewList = append(s.viewList, v)
-	}
+	s.viewList = views.GetRegistry().GetAll()
 	s.selectedIdx = min(s.selectedIdx, len(s.viewList)-1)
 }
 

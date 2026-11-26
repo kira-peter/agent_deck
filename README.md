@@ -6,7 +6,7 @@
 
 ```
 ┌──────────────────────────────────────────────┐
-│   AgentDeck - Coding Agent Session Manager   │
+│            AgentDeck · Claude Code          │
 │              2026-11-26 11:05                │
 ├──────────────────────────────────────────────┤
 │                                              │
@@ -32,7 +32,7 @@
 - **开启新项目** — 内置 Miller Columns 风格目录选择器，选好目录后在新终端窗口启动助手
 - **会话** — 浏览所有会话，支持关键字搜索、按时间过滤、查看对话详情、删除或归档
 - **记忆** — Claude Code 汇总全局和各项目的 `CLAUDE.md` 与 `MEMORY.md`；Codex 汇总 `~/.codex` 和各项目根目录的 `AGENTS.md`
-- **指南**（仅 Claude Code）— 内置 Claude 记忆系统说明
+- **指南** — Claude Code 模式介绍记忆系统，Codex 模式介绍 `AGENTS.md` 指令与本地会话文件
 - **设置** — AgentDeck 自身的显示选项；Claude Code 的 `settings.json` 常用项可直接修改（多选项用轮盘选择）；Codex 提供打开 `config.toml` 的入口
 - **动画** — 菜单 spinner、进出页面的横线转场、删除时的射线清除
 - **中英双语** — 按 `T` 随时切换，语言会保存到配置文件

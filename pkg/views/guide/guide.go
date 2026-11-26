@@ -5,13 +5,15 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/kira-peter/agent_deck/pkg/core"
 	"github.com/kira-peter/agent_deck/pkg/i18n"
-	"github.com/kira-peter/agent_deck/pkg/views"
 	"github.com/kira-peter/agent_deck/pkg/ui/textwidth"
+	"github.com/kira-peter/agent_deck/pkg/views"
 )
 
-// GuideView displays documentation about Claude's memory system
+// GuideView displays documentation for the selected agent.
 type GuideView struct {
+	source       core.SourceKind
 	screen       tcell.Screen
 	width        int
 	height       int
@@ -21,12 +23,12 @@ type GuideView struct {
 
 func NewGuideView() views.View {
 	return &GuideView{
-		scrollOffset: 0,
+		source: core.GetConfig().GetSource(),
 	}
 }
 
 func (v *GuideView) Metadata() views.Metadata {
-	return views.Metadata{
+	metadata := views.Metadata{
 		ID:     "guide",
 		NameEn: "Guide",
 		NameZh: "指南",
@@ -34,6 +36,11 @@ func (v *GuideView) Metadata() views.Metadata {
 		DescZh: "了解 Claude 的记忆系统",
 		Icon:   "📖",
 	}
+	if v.source == core.SourceCodex {
+		metadata.DescEn = "Learn about Codex project instructions and session files"
+		metadata.DescZh = "了解 Codex 项目指令与会话文件"
+	}
+	return metadata
 }
 
 func (v *GuideView) Init(screen tcell.Screen) error {
@@ -45,6 +52,13 @@ func (v *GuideView) Init(screen tcell.Screen) error {
 
 func (v *GuideView) loadContent() {
 	mgr := i18n.GetManager()
+	if v.source == core.SourceCodex {
+		v.content = codexGuideEn
+		if mgr.IsChinese() {
+			v.content = codexGuideZh
+		}
+		return
+	}
 
 	if mgr.IsEnglish() {
 		v.content = []string{
@@ -189,7 +203,11 @@ func (v *GuideView) Render() error {
 
 	// Hints
 	v.drawHorizontalLine(v.height - 3)
-	v.drawCenteredText(v.height-2, "↑↓: Scroll  ESC: Back  T: Toggle Language",
+	hint := i18n.Text{
+		En: "↑↓: Scroll  ESC: Back  T: Toggle Language",
+		Zh: "↑↓: 滚动  ESC: 返回  T: 切换语言",
+	}
+	v.drawCenteredText(v.height-2, hint.Get(),
 		tcell.StyleDefault.Foreground(tcell.ColorGray))
 
 	v.screen.Show()
@@ -229,6 +247,7 @@ func (v *GuideView) HandleEvent(event tcell.Event) error {
 					v.scrollOffset++
 				}
 			case 't', 'T':
+				i18n.GetManager().Toggle()
 				v.loadContent()
 				v.scrollOffset = 0
 			}
