@@ -255,13 +255,53 @@ type codexPayload struct {
 	Content json.RawMessage `json:"content"`
 	// event_msg token_count
 	Info *struct {
-		Total struct {
-			Input  int64 `json:"input_tokens"`
-			Cached int64 `json:"cached_input_tokens"`
-			Write  int64 `json:"cache_write_input_tokens"`
-			Output int64 `json:"output_tokens"`
-		} `json:"total_token_usage"`
+		Total codexTokenTotals `json:"total_token_usage"`
 	} `json:"info"`
+}
+
+type codexTokenTotals struct {
+	Input  int64 `json:"input_tokens"`
+	Cached int64 `json:"cached_input_tokens"`
+	Write  int64 `json:"cache_write_input_tokens"`
+	Output int64 `json:"output_tokens"`
+}
+
+// CodexTokenSample is a timestamped snapshot of cumulative model usage.
+type CodexTokenSample struct {
+	At            time.Time
+	Input, Output int64
+}
+
+// ReadCodexTokenSamples reads the historical counters from a Codex rollout.
+// Input includes cached input, consistent with the app-server counters.
+func ReadCodexTokenSamples(path string) ([]CodexTokenSample, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var samples []CodexTokenSample
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	for sc.Scan() {
+		if !bytes.Contains(sc.Bytes(), []byte(`"token_count"`)) {
+			continue
+		}
+		var line codexLine
+		if json.Unmarshal(sc.Bytes(), &line) != nil || line.Type != "event_msg" {
+			continue
+		}
+		var p codexPayload
+		if json.Unmarshal(line.Payload, &p) != nil || p.Type != "token_count" || p.Info == nil {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339Nano, line.Timestamp)
+		if err == nil {
+			samples = append(samples, CodexTokenSample{At: at, Input: p.Info.Total.Input, Output: p.Info.Total.Output})
+		}
+	}
+	return samples, sc.Err()
 }
 
 func parseCodexRollout(path string) codexRollout {

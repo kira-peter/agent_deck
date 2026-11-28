@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kira-peter/agent_deck/pkg/ui/textwidth"
+	visual "github.com/will-to-meaning/terminal_visuals"
 )
 
 // The page transition between the menu and a view has two halves:
@@ -43,6 +44,9 @@ func (s *BubbleTeaSelector) StartTransition(reverse bool) bool {
 
 // Animating reports whether a transition is playing.
 func (s *BubbleTeaSelector) Animating() bool { return s.trans != nil }
+
+// StopTransition restores the full selector before displaying a popup.
+func (s *BubbleTeaSelector) StopTransition() { s.trans = nil }
 
 // TransitionDone reports whether the running transition has finished. A
 // finished reverse transition is cleared so the menu shows again; a finished
@@ -83,7 +87,7 @@ func (s *BubbleTeaSelector) transitionView(lines []string, selRow int) string {
 	if s.trans.reverse {
 		elapsed = transitionTotal - elapsed
 	}
-	lines[selRow] = s.stretchRow(ease(float64(elapsed) / float64(stretchDuration)))
+	lines[selRow] = s.stretchRow(visual.EaseInOutCubic(float64(elapsed) / float64(stretchDuration)))
 	return strings.Join(lines, "\n")
 }
 
@@ -143,14 +147,4 @@ func (s *BubbleTeaSelector) stretchRow(p float64) string {
 		b.WriteString(ansiGreen + c + ansiReset)
 	}
 	return b.String()
-}
-
-// ease is a smooth in-out curve on [0, 1].
-func ease(t float64) float64 {
-	t = min(max(t, 0), 1)
-	if t < 0.5 {
-		return 4 * t * t * t
-	}
-	f := 2*t - 2
-	return 1 + f*f*f/2
 }

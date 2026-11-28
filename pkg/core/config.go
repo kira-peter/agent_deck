@@ -20,9 +20,10 @@ type Config struct {
 
 // DisplayConfig contains display-related settings
 type DisplayConfig struct {
-	DateFormat   string `json:"dateFormat"`   // "relative" or "absolute"
-	SizeUnit     string `json:"sizeUnit"`     // "auto", "KB", "MB"
-	ItemsPerPage int    `json:"itemsPerPage"` // Number of items per page in lists
+	WorkspaceTheme string `json:"workspaceTheme,omitempty"`
+	DateFormat     string `json:"dateFormat"`   // "relative" or "absolute"
+	SizeUnit       string `json:"sizeUnit"`     // "auto", "KB", "MB"
+	ItemsPerPage   int    `json:"itemsPerPage"` // Number of items per page in lists
 }
 
 var (

@@ -306,7 +306,7 @@ func (cd *ClaudeDir) GetSessions() ([]Session, error) {
 
 // GetEncodedProjectSessions returns all sessions for the project stored in
 // projects/<encodedName>.
-// It first tries sessions-index.json; if absent, falls back to scanning .jsonl files directly.
+// It uses sessions-index.json for indexed sessions and reads newer rollouts directly.
 func (cd *ClaudeDir) GetEncodedProjectSessions(encodedName string) ([]Session, error) {
 	projectPath := filepath.Join(cd.Path, "projects", encodedName)
 	indexPath := filepath.Join(projectPath, "sessions-index.json")
@@ -314,11 +314,21 @@ func (cd *ClaudeDir) GetEncodedProjectSessions(encodedName string) ([]Session, e
 	if data, err := os.ReadFile(indexPath); err == nil {
 		var sessionsIndex []SessionIndex
 		if err := json.Unmarshal(data, &sessionsIndex); err != nil {
-			return nil, err
+			var index struct {
+				Entries []SessionIndex `json:"entries"`
+			}
+			if json.Unmarshal(data, &index) == nil {
+				sessionsIndex = index.Entries
+			}
 		}
 
 		var sessions []Session
+		known := make(map[string]bool, len(sessionsIndex))
 		for _, si := range sessionsIndex {
+			if si.SessionID == "" || known[si.SessionID] {
+				continue
+			}
+			known[si.SessionID] = true
 			session := Session{
 				ID:           si.SessionID,
 				ProjectPath:  si.ProjectPath,
@@ -346,15 +356,19 @@ func (cd *ClaudeDir) GetEncodedProjectSessions(encodedName string) ([]Session, e
 			}
 			sessions = append(sessions, session)
 		}
-		return sessions, nil
+		newSessions, err := cd.loadSessionsFromJsonl(projectPath, encodedName, known)
+		if err != nil && len(sessions) == 0 {
+			return nil, err
+		}
+		return append(sessions, newSessions...), nil
 	}
 
 	// Fallback: scan .jsonl files directly
-	return cd.loadSessionsFromJsonl(projectPath, encodedName)
+	return cd.loadSessionsFromJsonl(projectPath, encodedName, nil)
 }
 
 // loadSessionsFromJsonl scans .jsonl files in a project directory to build session list.
-func (cd *ClaudeDir) loadSessionsFromJsonl(projectPath, encodedName string) ([]Session, error) {
+func (cd *ClaudeDir) loadSessionsFromJsonl(projectPath, encodedName string, known map[string]bool) ([]Session, error) {
 	entries, err := os.ReadDir(projectPath)
 	if err != nil {
 		return nil, err
@@ -362,13 +376,16 @@ func (cd *ClaudeDir) loadSessionsFromJsonl(projectPath, encodedName string) ([]S
 
 	var sessions []Session
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") || known[strings.TrimSuffix(entry.Name(), ".jsonl")] {
 			continue
 		}
 
 		filePath := filepath.Join(projectPath, entry.Name())
 		session, err := cd.parseJsonlSession(filePath, projectPath, encodedName)
 		if err != nil {
+			continue
+		}
+		if known[session.ID] {
 			continue
 		}
 		sessions = append(sessions, session)

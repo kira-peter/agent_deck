@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -14,13 +15,14 @@ import (
 	"github.com/kira-peter/agent_deck/pkg/ui/selector"
 	"github.com/kira-peter/agent_deck/pkg/ui/transition"
 	"github.com/kira-peter/agent_deck/pkg/views"
+	"github.com/kira-peter/agent_deck/pkg/views/codexchat"
+	"github.com/kira-peter/agent_deck/pkg/views/sessions"
 
 	// Import views to trigger their init() registration
 	_ "github.com/kira-peter/agent_deck/pkg/views/guide"
 	_ "github.com/kira-peter/agent_deck/pkg/views/memory"
 	_ "github.com/kira-peter/agent_deck/pkg/views/overview"
 	_ "github.com/kira-peter/agent_deck/pkg/views/projects"
-	_ "github.com/kira-peter/agent_deck/pkg/views/sessions"
 	_ "github.com/kira-peter/agent_deck/pkg/views/settings"
 )
 
@@ -34,6 +36,7 @@ type model struct {
 	ready          bool
 	width          int
 	height         int
+	exitPopup      *exitPopup
 }
 
 // lastViewID remembers the view opened last, so the selector highlights it
@@ -54,11 +57,11 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tickCmd()
+	return tickCmd(80 * time.Millisecond)
 }
 
-func tickCmd() tea.Cmd {
-	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg {
+func tickCmd(interval time.Duration) tea.Cmd {
+	return tea.Tick(interval, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -75,17 +78,31 @@ func frameCmd() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.exitPopup != nil {
+			_, running := codexchat.ExitStatus()
+			switch m.exitPopup.handle(msg.String(), running) {
+			case exitCancel:
+				m.exitPopup = nil
+			case exitWorkspace:
+				codexchat.FocusForExit()
+				m.selectedViewID = codexchat.ViewID
+				return m, tea.Quit
+			case exitConfirm:
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		if m.selector.Animating() {
 			if msg.String() == "ctrl+c" {
-				return m, tea.Quit
+				m.selector.StopTransition()
+				return m.requestExit()
 			}
 			return m, nil // ignore keys while the transition plays
 		}
 		result := m.selector.HandleKey(msg)
 
 		if result == -2 {
-			// 用户按 q 或 ESC，不选择任何视图，直接退出
-			return m, tea.Quit
+			return m.requestExit()
 		} else if result >= 0 {
 			// 用户按 Enter 选中视图：先播放转场动画，结束后再退出
 			m.selectedViewID = m.selector.GetSelectedViewID()
@@ -126,18 +143,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		// Animation tick - selector will update internally
-		return m, tickCmd()
+		interval := 80 * time.Millisecond
+		if m.exitPopup != nil {
+			interval = m.exitPopup.refreshInterval(interval)
+		}
+		return m, tickCmd(interval)
 	}
 
 	return m, nil
 }
 
 func (m model) View() string {
-	return m.selector.View()
+	background := m.selector.View()
+	if m.exitPopup == nil {
+		return background
+	}
+	open, running := codexchat.ExitStatus()
+	return m.exitPopup.overlay(background, m.width, m.height, open, running)
+}
+
+func (m model) requestExit() (tea.Model, tea.Cmd) {
+	m.selectedViewID = ""
+	if open, _ := codexchat.ExitStatus(); open == 0 {
+		return m, tea.Quit
+	}
+	m.exitPopup = newExitPopup()
+	return m, nil
 }
 
 func main() {
+	defer codexchat.Shutdown()
 	// Initialize random seed
 	rand.Seed(time.Now().UnixNano())
 
@@ -173,21 +208,13 @@ func main() {
 		// Run Bubble Tea selector
 		selectedViewID := runSelector()
 
-		if selectedViewID == "" {
-			// User quit without selecting a view
-			return
+		if selectedViewID != "" {
+			lastViewID = selectedViewID
+			if runView(selectedViewID) {
+				continue
+			}
 		}
-
-		lastViewID = selectedViewID
-
-		// Run the selected view with tcell. It sets returning when it played
-		// the closing half of the transition, so the menu plays the rest.
-		shouldContinue := runView(selectedViewID)
-
-		if !shouldContinue {
-			// User chose to quit from view
-			return
-		}
+		return
 	}
 }
 
@@ -241,8 +268,7 @@ func runView(viewID string) bool {
 	}
 
 	// Load the view
-	registry := views.GetRegistry()
-	view, err := registry.Get(viewID)
+	view, err := views.GetRegistry().Get(viewID)
 	if err != nil {
 		raw.Fini()
 		fmt.Printf("Error loading view: %v\n", err)
@@ -264,7 +290,32 @@ func runView(viewID string) bool {
 	}
 	for {
 		ev := screen.PollEvent()
-		err := view.HandleEvent(ev)
+		if ev == nil {
+			view.Cleanup()
+			return false
+		}
+		var err error
+		if key, ok := ev.(*tcell.EventKey); ok && key.Key() == tcell.KeyCtrlC && viewID != codexchat.ViewID {
+			err = errors.New("quit")
+		} else {
+			err = view.HandleEvent(ev)
+		}
+		var request codexchat.SessionPageRequest
+		if errors.As(err, &request) {
+			next := sessions.NewAgentSessionsView(request.Kind, request.Home)
+			view.Cleanup()
+			if err := next.Init(screen); err != nil {
+				raw.Fini()
+				fmt.Printf("Error opening sessions: %v\n", err)
+				return true
+			}
+			view = next
+			viewID = next.Metadata().ID
+			lastViewID = viewID
+			menu = nil
+			view.Render()
+			continue
+		}
 
 		if err != nil {
 			if err.Error() == "back" {
@@ -273,9 +324,26 @@ func runView(viewID string) bool {
 				view.Cleanup()
 				return true
 			} else if err.Error() == "quit" {
-				// Quit application
-				view.Cleanup()
-				return false
+				switch confirmExitOnScreen(screen, view) {
+				case exitConfirm:
+					view.Cleanup()
+					return false
+				case exitWorkspace:
+					codexchat.FocusForExit()
+					if viewID != codexchat.ViewID {
+						view.Cleanup()
+						view, err = views.GetRegistry().Get(codexchat.ViewID)
+						if err != nil {
+							fmt.Printf("Error opening workspace: %v\n", err)
+							return true
+						}
+						if err := view.Init(screen); err != nil {
+							fmt.Printf("Error opening workspace: %v\n", err)
+							return true
+						}
+						viewID, lastViewID, menu = codexchat.ViewID, codexchat.ViewID, nil
+					}
+				}
 			}
 			// Other errors: continue
 		}

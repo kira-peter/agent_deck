@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -10,8 +11,10 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/kira-peter/agent_deck/pkg/core"
 	"github.com/kira-peter/agent_deck/pkg/i18n"
-	"github.com/kira-peter/agent_deck/pkg/views"
 	"github.com/kira-peter/agent_deck/pkg/ui/textwidth"
+	"github.com/kira-peter/agent_deck/pkg/views"
+	"github.com/kira-peter/agent_deck/pkg/views/codexchat"
+	"github.com/kira-peter/agent_deck/pkg/views/dirpicker"
 )
 
 // SessionsView displays all sessions
@@ -31,10 +34,12 @@ type SessionsView struct {
 	detailSession      *core.Session
 
 	// Search / filter state
-	searchMode       bool
-	searchQuery      string
-	filterIndex      int // 0=All 1=Today 2=Week 3=Month
+	searchMode        bool
+	searchQuery       string
+	filterIndex       int // 0=All 1=Today 2=Week 3=Month
 	displayedSessions []core.Session
+	marked            map[string]bool
+	workspaceNotice   string
 
 	// gapAt is the visible list row left blank while rows slide up after a
 	// delete; rows below it are drawn one row lower. -1 when not animating.
@@ -46,8 +51,24 @@ type SessionsView struct {
 
 // NewSessionsView creates a new sessions view
 func NewSessionsView() views.View {
+	return newSessionsView(core.CurrentSource())
+}
+
+// NewAgentSessionsView opens the session list for the workspace's agent and home.
+func NewAgentSessionsView(kind core.SourceKind, home string) views.View {
+	return newSessionsView(agentSessionSource(kind, home))
+}
+
+func agentSessionSource(kind core.SourceKind, home string) core.Source {
+	if kind == core.SourceClaude {
+		return core.NewClaudeDir(home)
+	}
+	return core.NewCodexDir(home)
+}
+
+func newSessionsView(source core.Source) *SessionsView {
 	return &SessionsView{
-		src:          core.CurrentSource(),
+		src:          source,
 		selectedIdx:  0,
 		scrollOffset: 0,
 		gapAt:        -1,
@@ -152,6 +173,9 @@ func (v *SessionsView) renderTitle() {
 	if v.searchQuery != "" {
 		title += fmt.Sprintf(" [%s%s]", i18n.HintSearch.Get(), v.searchQuery)
 	}
+	if len(v.marked) > 0 {
+		title += fmt.Sprintf((i18n.Text{En: " · %d selected", Zh: " · 已选 %d"}).Get(), len(v.marked))
+	}
 	v.drawCenteredText(1, title, v.st(tcell.StyleDefault.
 		Foreground(tcell.ColorLightGreen).Bold(true)))
 	v.drawHorizontalLine(3)
@@ -224,6 +248,9 @@ func (v *SessionsView) renderSessionList() {
 				Background(tcell.ColorLightGreen)
 		}
 		style = v.st(style)
+		if v.marked[session.ID] {
+			v.drawText(startX-2, y, "✓", v.st(tcell.StyleDefault.Foreground(tcell.ColorLightCyan).Bold(true)))
+		}
 
 		sessionID := session.ID
 		if len(sessionID) > 8 {
@@ -258,6 +285,11 @@ func (v *SessionsView) renderHints() {
 		v.drawCenteredText(y, query, v.st(tcell.StyleDefault.Foreground(tcell.ColorYellow)))
 	} else {
 		hints := i18n.HintListActions.Get()
+		workspaceHint := (i18n.Text{En: "Space: Mark · F4: Open in workspace · F5: New session", Zh: "空格 多选 · F4 加入工作区 · F5 新建会话"}).Get()
+		if v.workspaceNotice != "" {
+			workspaceHint = v.workspaceNotice
+		}
+		v.drawCenteredText(y+1, workspaceHint, v.st(tcell.StyleDefault.Foreground(tcell.ColorLightCyan)))
 		v.drawCenteredText(y, hints, v.st(tcell.StyleDefault.Foreground(tcell.ColorGray)))
 	}
 }
@@ -411,6 +443,7 @@ func (v *SessionsView) HandleEvent(event tcell.Event) error {
 }
 
 func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
+	v.workspaceNotice = ""
 	if v.searchMode {
 		return v.handleSearchInput(ev)
 	}
@@ -421,6 +454,22 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 		v.movePrev()
 	case tcell.KeyDown:
 		v.moveNext()
+	case tcell.KeyF4:
+		selected := v.workspaceSelection()
+		if len(selected) > 0 {
+			return v.returnFromWorkspace(codexchat.OpenSessions(v.screen, v.src, selected))
+		}
+	case tcell.KeyF5:
+		project, err := dirpicker.PickDirectory(v.screen)
+		v.width, v.height = v.screen.Size()
+		if err != nil {
+			if err.Error() == "quit" {
+				return err
+			}
+			v.workspaceNotice = err.Error()
+		} else if project != "" {
+			return v.returnFromWorkspace(codexchat.Open(v.screen, project, v.src, nil))
+		}
 	case tcell.KeyEnter:
 		if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
 			v.loadSessionDetail(v.displayedSessions[v.selectedIdx])
@@ -428,6 +477,18 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 		}
 	case tcell.KeyRune:
 		switch ev.Rune() {
+		case ' ':
+			if v.selectedIdx >= 0 && v.selectedIdx < len(v.displayedSessions) {
+				id := v.displayedSessions[v.selectedIdx].ID
+				if v.marked == nil {
+					v.marked = make(map[string]bool)
+				}
+				if v.marked[id] {
+					delete(v.marked, id)
+				} else if id != "" {
+					v.marked[id] = true
+				}
+			}
 		case 'q', 'Q':
 			return fmt.Errorf("quit")
 		case 'k':
@@ -435,14 +496,7 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 		case 'j':
 			v.moveNext()
 		case 'r', 'R':
-			sessions, err := v.src.GetSessions()
-			if err == nil {
-				sort.Slice(sessions, func(i, j int) bool {
-					return sessions[i].Modified.After(sessions[j].Modified)
-				})
-				v.sessions = sessions
-				v.rebuildDisplay()
-			}
+			v.reloadSessions()
 		case 'd': // delete (with confirmation)
 			if len(v.displayedSessions) > 0 && v.selectedIdx < len(v.displayedSessions) {
 				v.deleteSession(v.displayedSessions[v.selectedIdx])
@@ -463,6 +517,55 @@ func (v *SessionsView) handleListEvent(ev *tcell.EventKey) error {
 		}
 	}
 	return nil
+}
+
+func (v *SessionsView) workspaceSelection() []core.Session {
+	if len(v.marked) == 0 {
+		if v.selectedIdx >= 0 && v.selectedIdx < len(v.displayedSessions) {
+			return []core.Session{v.displayedSessions[v.selectedIdx]}
+		}
+		return nil
+	}
+	var selected []core.Session
+	for _, session := range v.sessions {
+		if v.marked[session.ID] {
+			selected = append(selected, session)
+		}
+	}
+	clear(v.marked)
+	return selected
+}
+
+func (v *SessionsView) returnFromWorkspace(err error) error {
+	v.width, v.height = v.screen.Size()
+	var request codexchat.SessionPageRequest
+	if err == nil || errors.As(err, &request) && request.Home == v.src.Dir() && request.Kind == v.src.Kind() {
+		v.reloadSessions()
+		return nil
+	}
+	return err
+}
+
+func (v *SessionsView) reloadSessions() {
+	source := agentSessionSource(v.src.Kind(), v.src.Dir())
+	sessions, err := source.GetSessions()
+	if err != nil {
+		v.workspaceNotice = err.Error()
+		return
+	}
+	var id string
+	if v.selectedIdx >= 0 && v.selectedIdx < len(v.displayedSessions) {
+		id = v.displayedSessions[v.selectedIdx].ID
+	}
+	sort.Slice(sessions, func(i, j int) bool { return sessions[i].Modified.After(sessions[j].Modified) })
+	v.src, v.sessions = source, sessions
+	v.rebuildDisplay()
+	for i, session := range v.displayedSessions {
+		if session.ID == id {
+			v.selectedIdx = i
+			break
+		}
+	}
 }
 
 func (v *SessionsView) handleSearchInput(ev *tcell.EventKey) error {
@@ -630,6 +733,7 @@ func (v *SessionsView) removeSession(session core.Session, op func(core.Session)
 	if err := op(session); err != nil {
 		return err
 	}
+	delete(v.marked, session.ID)
 
 	v.Render() // the list as it was, without any dialog on top
 	gap := v.selectedIdx - v.scrollOffset

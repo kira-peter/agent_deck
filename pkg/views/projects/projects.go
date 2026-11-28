@@ -9,12 +9,13 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/mattn/go-runewidth"
 	"github.com/kira-peter/agent_deck/pkg/core"
 	"github.com/kira-peter/agent_deck/pkg/i18n"
 	"github.com/kira-peter/agent_deck/pkg/ui/rowfx"
 	"github.com/kira-peter/agent_deck/pkg/views"
+	"github.com/kira-peter/agent_deck/pkg/views/codexchat"
 	"github.com/kira-peter/agent_deck/pkg/views/dirpicker"
+	"github.com/mattn/go-runewidth"
 )
 
 // cw measures display width the way terminals draw it: CJK is two cells, but
@@ -344,7 +345,10 @@ func (v *ProjectsView) renderHints() {
 	y := v.height - 2
 	v.drawHorizontalLine(y - 1)
 
-	hints := i18n.HintProjectActions.Get()
+	hints := (i18n.Text{
+		En: "Enter Chat · F2 CLI · F4 Workspace · ↑↓/jk Move · d Delete · R Refresh · Esc Back",
+		Zh: "Enter 对话 · F2 原版 CLI · F4 工作区 · ↑↓/jk 移动 · d 删除 · R 刷新 · Esc 返回",
+	}).Get()
 	v.drawCenteredText(y, hints, v.st(tcell.StyleDefault.Foreground(tcell.ColorGray)))
 }
 
@@ -355,13 +359,14 @@ func (v *ProjectsView) HandleEvent(event tcell.Event) error {
 		case tcell.KeyEscape:
 			return fmt.Errorf("back")
 		case tcell.KeyEnter:
-			// Open Claude in the selected project directory
-			if v.selectedIdx == -1 {
-				// 打开新项目 - 启动目录选择器
-				return v.openNewProject()
-			} else if v.selectedIdx >= 0 && v.selectedIdx < len(v.projects) {
-				return v.openProject(v.projects[v.selectedIdx])
+			return v.openSelection(false)
+		case tcell.KeyF2:
+			return v.openSelection(true)
+		case tcell.KeyF4:
+			if err := codexchat.Show(v.screen); err != nil {
+				return err
 			}
+			v.width, v.height = v.screen.Size()
 		case tcell.KeyUp:
 			v.movePrev()
 		case tcell.KeyDown:
@@ -415,35 +420,51 @@ func (v *ProjectsView) moveNext() {
 	}
 }
 
-// openProject opens the project in the current agent. With existing sessions
-// the user first picks between a new session and resuming one of them.
-func (v *ProjectsView) openProject(project core.Project) error {
+func (v *ProjectsView) openSelection(originalCLI bool) error {
+	if v.selectedIdx == -1 {
+		return v.openNewProject(originalCLI)
+	}
+	if v.selectedIdx < 0 || v.selectedIdx >= len(v.projects) {
+		return nil
+	}
+	project := v.projects[v.selectedIdx]
 	sessions := v.loadProjectSessions(project)
 	if len(sessions) == 0 {
-		return v.launchAgent(project.Path, "")
+		return v.openAgent(project.Path, nil, originalCLI)
 	}
 
 	switch choice := v.chooseSession(project, sessions); choice {
 	case resumeCancel:
 		return nil
 	case resumeNew:
-		return v.launchAgent(project.Path, "")
+		return v.openAgent(project.Path, nil, originalCLI)
 	default:
-		return v.launchAgent(project.Path, sessions[choice].ID)
+		return v.openAgent(project.Path, &sessions[choice], originalCLI)
 	}
 }
 
-// launchAgent starts the current agent (claude or codex) in projectPath in a
-// new window. A non-empty sessionID resumes that session instead of starting
-// a new one.
-func (v *ProjectsView) launchAgent(projectPath, sessionID string) error {
+func (v *ProjectsView) openAgent(projectPath string, session *core.Session, originalCLI bool) error {
 	// Check if the directory exists
 	if _, err := os.Stat(projectPath); os.IsNotExist(err) {
 		v.showResultBox(fmt.Sprintf(i18n.MsgProjectDirMissing.Get(), projectPath), tcell.ColorRed, 0)
 		return nil
 	}
+	if !originalCLI {
+		if err := codexchat.Open(v.screen, projectPath, v.src, session); err != nil {
+			return err
+		}
+		v.width, v.height = v.screen.Size()
+		// A new data source picks up sessions written by the app-server.
+		v.src = core.CurrentSource()
+		v.reloadProjects()
+		return nil
+	}
 
 	// The tab title is the project folder (Claude only; Codex ignores it).
+	sessionID := ""
+	if session != nil {
+		sessionID = session.ID
+	}
 	exe, args := v.src.LaunchArgs(projectPath, sessionID, filepath.Base(projectPath))
 	file, args, raw, err := resolveLauncher(exe, args)
 	if err != nil {
@@ -474,7 +495,10 @@ func (v *ProjectsView) launchAgent(projectPath, sessionID string) error {
 		return nil
 	}
 
-	// Success - exit the manager
+	if codexchat.HasSessions() {
+		return nil
+	}
+	// Preserve the original launcher behavior when no sessions are open.
 	return fmt.Errorf("quit")
 }
 
@@ -576,7 +600,7 @@ func (v *ProjectsView) reloadProjects() {
 }
 
 // openNewProject 启动目录选择器以打开新项目
-func (v *ProjectsView) openNewProject() error {
+func (v *ProjectsView) openNewProject(originalCLI bool) error {
 	// 创建目录选择器
 	picker := dirpicker.NewDirPickerView()
 	if err := picker.Init(v.screen); err != nil {
@@ -601,7 +625,7 @@ func (v *ProjectsView) openNewProject() error {
 			if err.Error() == "confirmed" {
 				// 用户确认了选择
 				selectedPath := picker.GetSelectedPath()
-				return v.launchAgent(selectedPath, "")
+				return v.openAgent(selectedPath, nil, originalCLI)
 			}
 			// 取消或返回 - 返回项目列表
 			return nil

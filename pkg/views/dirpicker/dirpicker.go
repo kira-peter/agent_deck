@@ -1,11 +1,42 @@
 package dirpicker
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/kira-peter/agent_deck/pkg/views"
 )
+
+// PickDirectory shows the picker on an existing screen. Cancel returns an
+// empty path. Ctrl+C propagates a request to quit the application.
+func PickDirectory(screen tcell.Screen) (string, error) {
+	v := NewDirPickerView()
+	if err := v.Init(screen); err != nil {
+		return "", err
+	}
+	defer v.Cleanup()
+	for {
+		_ = v.Render()
+		event := screen.PollEvent()
+		if event == nil {
+			return "", nil
+		}
+		if key, ok := event.(*tcell.EventKey); ok && key.Key() == tcell.KeyCtrlC {
+			return "", errors.New("quit")
+		}
+		if err := v.HandleEvent(event); err != nil {
+			switch err.Error() {
+			case "confirmed":
+				return v.GetSelectedPath(), nil
+			case "back":
+				return "", nil
+			default:
+				return "", err
+			}
+		}
+	}
+}
 
 // NewDirPickerView 创建新的目录选择器视图
 func NewDirPickerView() *DirPickerView {
